@@ -2,3 +2,7 @@ node_modules
 dist
 .env
 .env.test
+
+/src/generated/prisma
+
+/generated/prisma
