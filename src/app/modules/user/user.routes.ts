@@ -7,6 +7,9 @@ const router = express.Router();
 
 export const userRoutes = router;
 
+// get all users from database
+router.get("/", userController.getAllFromDB);
+
 router.post(
     "/create-patient",
     fileUploader.upload.single("file"),
