@@ -22,14 +22,20 @@ const login = async (payload: { email: string; password: string }) => {
             throw new Error("Invalid credentials");
         }
 
+        const tokenPayload = {
+            userId: user.id,
+            email: user.email,
+            role: user.role,
+        };
+
         const accessToken = jwtHelper.generateToken(
-            payload,
+            tokenPayload,
             config.jwt.access_token_expires_in as SignOptions["expiresIn"],
             config.jwt.access_secret_key as jwt.Secret,
         );
 
         const refreshToken = jwtHelper.generateToken(
-            payload,
+            tokenPayload,
             config.jwt.refresh_token_expires_in as SignOptions["expiresIn"],
             config.jwt.refresh_secret_key as jwt.Secret,
         );
