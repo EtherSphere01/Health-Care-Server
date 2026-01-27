@@ -1,11 +1,11 @@
-type IOptions = {
+export type IOptions = {
     page?: number | string;
     limit?: number | string;
     sortBy?: string;
     sortOrder?: "asc" | "desc";
 };
 
-type IOptionsResult = {
+export type IOptionsResult = {
     page: number;
     limit: number;
     skip: number;
