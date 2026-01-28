@@ -48,8 +48,9 @@ model Doctor {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  user            User              @relation(fields: [email], references: [email], onDelete: Cascade, onUpdate: Cascade)
-  doctorSchedules DoctorSchedules[]
+  user              User                @relation(fields: [email], references: [email], onDelete: Cascade, onUpdate: Cascade)
+  doctorSchedules   DoctorSchedules[]
+  doctorSpecialties DoctorSpecialties[]
 
   @@map("doctors")
 }
