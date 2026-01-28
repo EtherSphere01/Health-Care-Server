@@ -6,7 +6,7 @@ import cron from "node-cron";
 import globalErrorHandler from "./app/middlewares/globalErrorHandler";
 import router from "./app/routes";
 import { PaymentController } from "./app/modules/payment/payment.controller";
-import { AppointmentService } from "./app/modules/Appointment/appointment.service";
+import { AppointmentService } from "./app/modules/appointment/appointment.service";
 
 const app: Application = express();
 app.use(cookieParser());
@@ -28,7 +28,7 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-cron.schedule("*/5 * * * *", () => {
+cron.schedule("*/10 * * * *", () => {
     try {
         console.log(
             "🔄 Running unpaid appointment cleanup at",
