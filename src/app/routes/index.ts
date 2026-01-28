@@ -1,14 +1,22 @@
 import express from "express";
-import { userRoutes } from "../modules/user/user.routes";
-import { authRoutes } from "../modules/auth/auth.routes";
-import { scheduleRoutes } from "../modules/schedule/schedule.routes";
-import { doctorSchedule } from "../modules/doctorSchedule/doctorSchedule.routes";
-import { SpecialtiesRoutes } from "../modules/specialties/specialties.routes";
-import { doctorRoutes } from "../modules/doctor/doctor.routes";
-import { patientRoutes } from "../modules/patient/patient.routes";
-import { adminRoutes } from "../modules/admin/admin.routes";
+import { apiLimiter } from "../middlewares/rateLimiter";
+import { AppointmentRoutes } from "../modules/Appointment/appointment.routes";
+import { AuthRoutes } from "../modules/Auth/auth.routes";
+import { DoctorRoutes } from "../modules/Doctor/doctor.routes";
+import { DoctorScheduleRoutes } from "../modules/DoctorSchedule/doctorSchedule.routes";
+import { MetaRoutes } from "../modules/Meta/meta.routes";
+import { PatientRoutes } from "../modules/Patient/patient.route";
+import { PaymentRoutes } from "../modules/Payment/payment.routes";
+import { PrescriptionRoutes } from "../modules/Prescription/prescription.routes";
+import { ReviewRoutes } from "../modules/Review/review.routes";
+import { ScheduleRoutes } from "../modules/Schedule/schedule.routes";
+import { SpecialtiesRoutes } from "../modules/Specialties/specialties.routes";
+import { userRoutes } from "../modules/User/user.routes";
+import { AdminRoutes } from "../modules/admin/admin.routes";
 
 const router = express.Router();
+
+router.use(apiLimiter); // Apply to all routes
 
 const moduleRoutes = [
     {
@@ -16,16 +24,12 @@ const moduleRoutes = [
         route: userRoutes,
     },
     {
+        path: "/admin",
+        route: AdminRoutes,
+    },
+    {
         path: "/auth",
-        route: authRoutes,
-    },
-    {
-        path: "/schedule",
-        route: scheduleRoutes,
-    },
-    {
-        path: "/doctor-schedule",
-        route: doctorSchedule,
+        route: AuthRoutes,
     },
     {
         path: "/specialties",
@@ -33,15 +37,39 @@ const moduleRoutes = [
     },
     {
         path: "/doctor",
-        route: doctorRoutes,
+        route: DoctorRoutes,
     },
     {
         path: "/patient",
-        route: patientRoutes,
+        route: PatientRoutes,
     },
     {
-        path: "/admin",
-        route: adminRoutes,
+        path: "/schedule",
+        route: ScheduleRoutes,
+    },
+    {
+        path: "/doctor-schedule",
+        route: DoctorScheduleRoutes,
+    },
+    {
+        path: "/appointment",
+        route: AppointmentRoutes,
+    },
+    {
+        path: "/payment",
+        route: PaymentRoutes,
+    },
+    {
+        path: "/prescription",
+        route: PrescriptionRoutes,
+    },
+    {
+        path: "/review",
+        route: ReviewRoutes,
+    },
+    {
+        path: "/meta",
+        route: MetaRoutes,
     },
 ];
 

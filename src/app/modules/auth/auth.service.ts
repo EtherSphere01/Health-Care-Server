@@ -1,5 +1,5 @@
 import { UserStatus } from "@prisma/client";
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from "bcryptjs";
 import httpStatus from "http-status";
 import { Secret } from "jsonwebtoken";
 import config from "../../../config";
@@ -8,131 +8,144 @@ import prisma from "../../../shared/prisma";
 import ApiError from "../../errors/ApiError";
 import emailSender from "./emailSender";
 
-const loginUser = async (payload: {
-    email: string,
-    password: string
-}) => {
+const loginUser = async (payload: { email: string; password: string }) => {
     const userData = await prisma.user.findUniqueOrThrow({
         where: {
             email: payload.email,
-            status: UserStatus.ACTIVE
-        }
+            status: UserStatus.ACTIVE,
+        },
     });
 
-    const isCorrectPassword: boolean = await bcrypt.compare(payload.password, userData.password);
-
-    if (!isCorrectPassword) {
-        throw new Error("Password incorrect!")
-    }
-    const accessToken = jwtHelpers.generateToken({
-        email: userData.email,
-        role: userData.role
-    },
-        config.jwt.jwt_secret as Secret,
-        config.jwt.expires_in as string
+    const isCorrectPassword: boolean = await bcrypt.compare(
+        payload.password,
+        userData.password,
     );
 
-    const refreshToken = jwtHelpers.generateToken({
-        email: userData.email,
-        role: userData.role
-    },
+    if (!isCorrectPassword) {
+        throw new Error("Password incorrect!");
+    }
+    const accessToken = jwtHelpers.generateToken(
+        {
+            email: userData.email,
+            role: userData.role,
+        },
+        config.jwt.jwt_secret as Secret,
+        config.jwt.expires_in as string,
+    );
+
+    const refreshToken = jwtHelpers.generateToken(
+        {
+            email: userData.email,
+            role: userData.role,
+        },
         config.jwt.refresh_token_secret as Secret,
-        config.jwt.refresh_token_expires_in as string
+        config.jwt.refresh_token_expires_in as string,
     );
 
     return {
         accessToken,
         refreshToken,
-        needPasswordChange: userData.needPasswordChange
+        needPasswordChange: userData.needPasswordChange,
     };
 };
 
 const refreshToken = async (token: string) => {
     let decodedData;
     try {
-        decodedData = jwtHelpers.verifyToken(token, config.jwt.refresh_token_secret as Secret);
-    }
-    catch (err) {
-        throw new Error("You are not authorized!")
+        decodedData = jwtHelpers.verifyToken(
+            token,
+            config.jwt.refresh_token_secret as Secret,
+        );
+    } catch (err) {
+        throw new Error("You are not authorized!");
     }
 
     const userData = await prisma.user.findUniqueOrThrow({
         where: {
             email: decodedData.email,
-            status: UserStatus.ACTIVE
-        }
+            status: UserStatus.ACTIVE,
+        },
     });
 
-    const accessToken = jwtHelpers.generateToken({
-        email: userData.email,
-        role: userData.role
-    },
+    const accessToken = jwtHelpers.generateToken(
+        {
+            email: userData.email,
+            role: userData.role,
+        },
         config.jwt.jwt_secret as Secret,
-        config.jwt.expires_in as string
+        config.jwt.expires_in as string,
     );
 
-    const refreshToken = jwtHelpers.generateToken({
-        email: userData.email,
-        role: userData.role
-    },
+    const refreshToken = jwtHelpers.generateToken(
+        {
+            email: userData.email,
+            role: userData.role,
+        },
         config.jwt.refresh_token_secret as Secret,
-        config.jwt.refresh_token_expires_in as string
+        config.jwt.refresh_token_expires_in as string,
     );
 
     return {
         accessToken,
         refreshToken,
-        needPasswordChange: userData.needPasswordChange
+        needPasswordChange: userData.needPasswordChange,
     };
-
 };
 
 const changePassword = async (user: any, payload: any) => {
     const userData = await prisma.user.findUniqueOrThrow({
         where: {
             email: user.email,
-            status: UserStatus.ACTIVE
-        }
+            status: UserStatus.ACTIVE,
+        },
     });
 
-    const isCorrectPassword: boolean = await bcrypt.compare(payload.oldPassword, userData.password);
+    const isCorrectPassword: boolean = await bcrypt.compare(
+        payload.oldPassword,
+        userData.password,
+    );
 
     if (!isCorrectPassword) {
-        throw new Error("Password incorrect!")
+        throw new Error("Password incorrect!");
     }
 
-    const hashedPassword: string = await bcrypt.hash(payload.newPassword, Number(config.salt_round));
+    const hashedPassword: string = await bcrypt.hash(
+        payload.newPassword,
+        Number(config.salt_round),
+    );
 
     await prisma.user.update({
         where: {
-            email: userData.email
+            email: userData.email,
         },
         data: {
             password: hashedPassword,
-            needPasswordChange: false
-        }
-    })
+            needPasswordChange: false,
+        },
+    });
 
     return {
-        message: "Password changed successfully!"
-    }
+        message: "Password changed successfully!",
+    };
 };
 
 const forgotPassword = async (payload: { email: string }) => {
     const userData = await prisma.user.findUniqueOrThrow({
         where: {
             email: payload.email,
-            status: UserStatus.ACTIVE
-        }
+            status: UserStatus.ACTIVE,
+        },
     });
 
     const resetPassToken = jwtHelpers.generateToken(
         { email: userData.email, userId: userData.id, role: userData.role },
         config.jwt.reset_pass_secret as Secret,
-        config.jwt.reset_pass_token_expires_in as string
-    )
+        config.jwt.reset_pass_token_expires_in as string,
+    );
 
-    const resetPassLink = config.reset_pass_link + `?email=${encodeURIComponent(userData.email)}&token=${resetPassToken}`
+    const resetPassLink =
+        config.reset_pass_link +
+        `?email=${encodeURIComponent(userData.email)}&token=${resetPassToken}`;
 
     await emailSender(
         userData.email,
@@ -152,7 +165,7 @@ const forgotPassword = async (payload: { email: string }) => {
                             <!-- Header -->
                             <tr>
                                 <td style="padding: 40px 40px 20px 40px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px 8px 0 0;">
-                                    <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;">PH Health Care</h1>
+                                    <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;"> Health Care</h1>
                                 </td>
                             </tr>
                             <!-- Content -->
@@ -163,7 +176,7 @@ const forgotPassword = async (payload: { email: string }) => {
                                         Hello,
                                     </p>
                                     <p style="margin: 0 0 30px 0; color: #666666; font-size: 16px; line-height: 24px;">
-                                        We received a request to reset your password for your PH Health Care account. Click the button below to create a new password:
+                                        We received a request to reset your password for your Health Care account. Click the button below to create a new password:
                                     </p>
                                     <!-- Button -->
                                     <table role="presentation" style="margin: 0 auto;">
@@ -197,7 +210,7 @@ const forgotPassword = async (payload: { email: string }) => {
                             <tr>
                                 <td style="padding: 30px 40px; background-color: #f8f9fa; border-radius: 0 0 8px 8px; text-align: center;">
                                     <p style="margin: 0 0 10px 0; color: #999999; font-size: 14px;">
-                                        © ${new Date().getFullYear()} PH Health Care. All rights reserved.
+                                        © ${new Date().getFullYear()} Health Care. All rights reserved.
                                     </p>
                                     <p style="margin: 0; color: #999999; font-size: 12px;">
                                         This is an automated email. Please do not reply.
@@ -210,24 +223,37 @@ const forgotPassword = async (payload: { email: string }) => {
             </table>
         </body>
         </html>
-        `
-    )
+        `,
+    );
 };
 
-const resetPassword = async (token: string | null, payload: { email?: string, password: string }, user?: { email: string }) => {
+const resetPassword = async (
+    token: string | null,
+    payload: { email?: string; password: string },
+    user?: { email: string },
+) => {
     let userEmail: string;
 
     // Case 1: Token-based reset (from forgot password email)
     if (token) {
-        const decodedToken = jwtHelpers.verifyToken(token, config.jwt.reset_pass_secret as Secret)
+        const decodedToken = jwtHelpers.verifyToken(
+            token,
+            config.jwt.reset_pass_secret as Secret,
+        );
 
         if (!decodedToken) {
-            throw new ApiError(httpStatus.FORBIDDEN, "Invalid or expired reset token!")
+            throw new ApiError(
+                httpStatus.FORBIDDEN,
+                "Invalid or expired reset token!",
+            );
         }
 
         // Verify email from token matches the email in payload
         if (payload.email && decodedToken.email !== payload.email) {
-            throw new ApiError(httpStatus.FORBIDDEN, "Email mismatch! Invalid reset request.")
+            throw new ApiError(
+                httpStatus.FORBIDDEN,
+                "Email mismatch! Invalid reset request.",
+            );
         }
 
         userEmail = decodedToken.email;
@@ -238,43 +264,55 @@ const resetPassword = async (token: string | null, payload: { email?: string, pa
         const authenticatedUser = await prisma.user.findUniqueOrThrow({
             where: {
                 email: user.email,
-                status: UserStatus.ACTIVE
-            }
+                status: UserStatus.ACTIVE,
+            },
         });
 
         // Verify user actually needs password change
         if (!authenticatedUser.needPasswordChange) {
-            throw new ApiError(httpStatus.BAD_REQUEST, "You don't need to reset your password. Use change password instead.")
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                "You don't need to reset your password. Use change password instead.",
+            );
         }
 
         userEmail = user.email;
     } else {
-        throw new ApiError(httpStatus.BAD_REQUEST, "Invalid request. Either provide a valid token or be authenticated.")
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            "Invalid request. Either provide a valid token or be authenticated.",
+        );
     }
 
     // hash password
-    const password = await bcrypt.hash(payload.password, Number(config.salt_round));
+    const password = await bcrypt.hash(
+        payload.password,
+        Number(config.salt_round),
+    );
 
     // update into database
     await prisma.user.update({
         where: {
-            email: userEmail
+            email: userEmail,
         },
         data: {
             password,
-            needPasswordChange: false
-        }
-    })
+            needPasswordChange: false,
+        },
+    });
 };
 
 const getMe = async (user: any) => {
     const accessToken = user.accessToken;
-    const decodedData = jwtHelpers.verifyToken(accessToken, config.jwt.jwt_secret as Secret);
+    const decodedData = jwtHelpers.verifyToken(
+        accessToken,
+        config.jwt.jwt_secret as Secret,
+    );
 
     const userData = await prisma.user.findUniqueOrThrow({
         where: {
             email: decodedData.email,
-            status: UserStatus.ACTIVE
+            status: UserStatus.ACTIVE,
         },
         select: {
             id: true,
@@ -294,7 +332,7 @@ const getMe = async (user: any) => {
                     isDeleted: true,
                     createdAt: true,
                     updatedAt: true,
-                }
+                },
             },
             doctor: {
                 select: {
@@ -317,10 +355,10 @@ const getMe = async (user: any) => {
                     updatedAt: true,
                     doctorSpecialties: {
                         include: {
-                            specialities: true
-                        }
-                    }
-                }
+                            specialities: true,
+                        },
+                    },
+                },
             },
             patient: {
                 select: {
@@ -334,15 +372,13 @@ const getMe = async (user: any) => {
                     createdAt: true,
                     updatedAt: true,
                     patientHealthData: true,
-                }
-            }
-        }
+                },
+            },
+        },
     });
 
     return userData;
-}
-
-
+};
 
 export const AuthServices = {
     loginUser,
@@ -350,5 +386,5 @@ export const AuthServices = {
     changePassword,
     forgotPassword,
     resetPassword,
-    getMe
-}
+    getMe,
+};

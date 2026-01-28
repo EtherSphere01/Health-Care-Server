@@ -1,11 +1,13 @@
-import express, { NextFunction, Request, Response } from "express";
-import { SpecialtiesController } from "./specialties.controller";
-import { SpecialtiesValidation } from "./specialties.validation";
-import auth from "../../middlewares/auth";
-import { UserRole } from "@prisma/client";
-import { fileUploader } from "../../helpers/fileUploader";
+import express, { NextFunction, Request, Response } from 'express';
+import { SpecialtiesController } from './specialties.controller';
+import { fileUploader } from '../../../helpers/fileUploader';
+import { SpecialtiesValidtaion } from './specialties.validation';
+import auth from '../../middlewares/auth';
+import { UserRole } from '@prisma/client';
+
 
 const router = express.Router();
+
 
 // Task 1: Retrieve Specialties Data
 
@@ -14,19 +16,21 @@ const router = express.Router();
 - Implement an HTTP GET endpoint returning specialties in JSON format.
 - ENDPOINT: /specialties
 */
-router.get("/", SpecialtiesController.getAllFromDB);
+router.get(
+    '/',
+    SpecialtiesController.getAllFromDB
+);
 
 router.post(
-    "/",
-    auth(UserRole.ADMIN),
-    fileUploader.upload.single("file"),
+    '/',
+    fileUploader.upload.single('file'),
     (req: Request, res: Response, next: NextFunction) => {
-        req.body = SpecialtiesValidation.create.parse(
-            JSON.parse(req.body.data),
-        );
-        return SpecialtiesController.insertIntoDB(req, res, next);
-    },
+        req.body = SpecialtiesValidtaion.create.parse(JSON.parse(req.body.data))
+        return SpecialtiesController.insertIntoDB(req, res, next)
+    }
 );
+
+
 
 // Task 2: Delete Specialties Data by ID
 
@@ -37,6 +41,10 @@ router.post(
 - ENDPOINT: /specialties/:id
 */
 
-router.delete("/:id", auth(UserRole.ADMIN), SpecialtiesController.deleteFromDB);
+router.delete(
+    '/:id',
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    SpecialtiesController.deleteFromDB
+);
 
 export const SpecialtiesRoutes = router;

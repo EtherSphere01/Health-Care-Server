@@ -1,52 +1,95 @@
-import z from "zod";
+import { Gender, UserStatus } from "@prisma/client";
+import { z } from "zod";
 
-const genderEnumValues = ["MALE", "FEMALE"] as const;
-
-const createPatientValidationSchema = z.object({
-    password: z.string().min(6, "Password must be at least 6 characters long"),
-    patient: z.object({
-        name: z.string().min(1, "Name is required"),
-        email: z.string().email("Invalid email address"),
-        address: z.string().optional(),
+const createAdmin = z.object({
+    password: z.string({
+        error: "Password is required",
     }),
-});
-
-const createDoctorValidationSchema = z.object({
-    password: z.string().min(6, "Password must be at least 6 characters long"),
-    doctor: z.object({
-        name: z.string().min(1, "Name is required"),
-        email: z.string().email("Invalid email address"),
-        contactNumber: z.string().min(1, "Contact number is required"),
-        address: z.string().optional(),
-        registrationNumber: z
-            .string()
-            .min(1, "Registration number is required"),
-        expertise: z.number().int().nonnegative().optional(),
-        gender: z.enum(genderEnumValues, {
-            message: "Gender is required",
-        }),
-        appointmentFee: z.number().int().nonnegative({
-            message: "Appointment fee must be a non-negative number",
-        }),
-        qualification: z.string().min(1, "Qualification is required"),
-        currentWorkingPlace: z
-            .string()
-            .min(1, "Current working place is required"),
-        designation: z.string().min(1, "Designation is required"),
-    }),
-});
-
-const createAdminValidationSchema = z.object({
-    password: z.string().min(6, "Password must be at least 6 characters long"),
     admin: z.object({
-        name: z.string().min(1, "Name is required"),
-        email: z.string().email("Invalid email address"),
-        contactNumber: z.string().min(1, "Contact number is required"),
+        name: z.string({
+            error: "Name is required!",
+        }),
+        email: z.string({
+            error: "Email is required!",
+        }),
+        contactNumber: z.string({
+            error: "Contact Number is required!",
+        }),
+    }),
+});
+
+const createDoctor = z.object({
+    password: z.string({
+        error: "Password is required",
+    }),
+    doctor: z.object({
+        name: z.string({
+            error: "Name is required!",
+        }),
+        email: z.string({
+            error: "Email is required!",
+        }),
+        contactNumber: z.string({
+            error: "Contact Number is required!",
+        }),
+        address: z.string().optional(),
+        registrationNumber: z.string({
+            error: "Reg number is required",
+        }),
+        experience: z.number().optional(),
+        gender: z.enum([Gender.MALE, Gender.FEMALE]),
+        appointmentFee: z.number({
+            error: "Appointment fee is required",
+        }),
+        qualification: z.string({
+            error: "Qualification is required",
+        }),
+        currentWorkingPlace: z.string({
+            error: "Current working place is required!",
+        }),
+        designation: z.string({
+            error: "Designation is required!",
+        }),
+        // NEW: Add specialties array for doctor creation
+        specialties: z
+            .array(
+                z.string().uuid({
+                    message: "Each specialty must be a valid UUID",
+                })
+            )
+            .min(1, {
+                message: "At least one specialty is required",
+            })
+            .optional(),
+    }),
+});
+
+const createPatient = z.object({
+    password: z.string(),
+    patient: z.object({
+        email: z
+            .email(),
+        name: z.string({
+            error: "Name is required!",
+        }),
+        contactNumber: z.string({
+            error: "Contact number is required!",
+        }).optional(),
+        address: z.string({
+            error: "Address is required",
+        }).optional(),
+    }),
+});
+
+const updateStatus = z.object({
+    body: z.object({
+        status: z.enum([UserStatus.ACTIVE, UserStatus.BLOCKED, UserStatus.DELETED]),
     }),
 });
 
 export const userValidation = {
-    createPatientValidationSchema,
-    createDoctorValidationSchema,
-    createAdminValidationSchema,
+    createAdmin,
+    createDoctor,
+    createPatient,
+    updateStatus,
 };

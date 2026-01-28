@@ -1,10 +1,7 @@
-import nodemailer from 'nodemailer'
-import config from '../../../config';
+import nodemailer from "nodemailer";
+import config from "../../../config";
 
-const emailSender = async (
-    email: string,
-    html: string
-) => {
+const emailSender = async (email: string, html: string) => {
     const transporter = nodemailer.createTransport({
         host: "smtp.gmail.com",
         port: 587,
@@ -14,18 +11,17 @@ const emailSender = async (
             pass: config.emailSender.app_pass,
         },
         tls: {
-            rejectUnauthorized: false
-        }
+            rejectUnauthorized: false,
+        },
     });
 
     const info = await transporter.sendMail({
-        from: '"PH Health Care" <shafayat.ph@gmail.com>', // sender address
+        from: '"Health Care" <naimurrahmanfacebook1@gmail.com>', // sender address
         to: email, // list of receivers
         subject: "Reset Password Link", // Subject line
         //text: "Hello world?", // plain text body
         html, // html body
     });
-
-}
+};
 
 export default emailSender;

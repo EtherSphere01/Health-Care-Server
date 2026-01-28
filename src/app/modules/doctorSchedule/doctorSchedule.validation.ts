@@ -1,17 +1,11 @@
-import z from "zod";
+import { z } from 'zod';
 
-const createDoctorScheduleValidationSchema = z.object({
+const create = z.object({
     body: z.object({
-        scheduleIds: z
-            .array(
-                z
-                    .string()
-                    .uuid({ message: "Each scheduleId must be a valid UUID" }),
-            )
-            .min(1, { message: "scheduleIds array cannot be empty" }),
+        scheduleIds: z.array(z.string()),
     }),
 });
 
-export const doctorScheduleValidation = {
-    createDoctorScheduleValidationSchema,
+export const DoctorScheduleValidation = {
+    create,
 };

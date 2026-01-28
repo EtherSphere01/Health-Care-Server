@@ -1,9 +1,10 @@
-import { Request } from "express";
-import { fileUploader } from "../../helpers/fileUploader";
-import { prisma } from "../../shared/prisma";
 import { Specialties } from "@prisma/client";
+import { Request } from "express";
+import { fileUploader } from "../../../helpers/fileUploader";
+import prisma from "../../../shared/prisma";
 
-const insertIntoDB = async (req: Request) => {
+const inserIntoDB = async (req: Request) => {
+
     const file = req.file;
 
     if (file) {
@@ -12,14 +13,37 @@ const insertIntoDB = async (req: Request) => {
     }
 
     const result = await prisma.specialties.create({
-        data: req.body,
+        data: req.body
     });
 
     return result;
 };
 
-const getAllFromDB = async (): Promise<Specialties[]> => {
-    return await prisma.specialties.findMany();
+import { paginationHelper } from "../../../helpers/paginationHelper";
+import { IPaginationOptions } from "../../interfaces/pagination";
+
+const getAllFromDB = async (options: IPaginationOptions) => {
+    const { limit, page, skip } = paginationHelper.calculatePagination(options);
+
+    const result = await prisma.specialties.findMany({
+        skip,
+        take: limit,
+        orderBy:
+            options.sortBy && options.sortOrder
+                ? { [options.sortBy]: options.sortOrder }
+                : { createdAt: "desc" },
+    });
+
+    const total = await prisma.specialties.count();
+
+    return {
+        meta: {
+            total,
+            page,
+            limit,
+        },
+        data: result,
+    };
 };
 
 const deleteFromDB = async (id: string): Promise<Specialties> => {
@@ -32,7 +56,7 @@ const deleteFromDB = async (id: string): Promise<Specialties> => {
 };
 
 export const SpecialtiesService = {
-    insertIntoDB,
+    inserIntoDB,
     getAllFromDB,
-    deleteFromDB,
-};
+    deleteFromDB
+}

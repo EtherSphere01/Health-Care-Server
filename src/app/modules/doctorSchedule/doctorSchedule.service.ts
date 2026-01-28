@@ -1,254 +1,215 @@
-import { prisma } from "../../shared/prisma";
-import { IJwtPayload } from "../../types/common";
-import { paginationHelper } from "../../helpers/paginationHelper";
 import { Prisma } from "@prisma/client";
+import { paginationHelper } from "../../../helpers/paginationHelper";
+import prisma from "../../../shared/prisma";
+import { IAuthUser } from "../../interfaces/common";
+import { IPaginationOptions } from "../../interfaces/pagination";
 import ApiError from "../../errors/ApiError";
-import httpsStatus from "http-status";
+import httpStatus from "http-status";
+import { IDoctorScheduleFilterRequest } from "./doctorSchedule.interface";
 
-const toValidDateOrUndefined = (value: unknown): Date | undefined => {
-    if (!value) return undefined;
-    if (value instanceof Date)
-        return Number.isNaN(value.getTime()) ? undefined : value;
-    if (typeof value === "string") {
-        const parsed = new Date(value);
-        return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-    }
-    return undefined;
-};
-
-const toBooleanOrUndefined = (value: unknown): boolean | undefined => {
-    if (value === undefined || value === null || value === "") return undefined;
-    if (typeof value === "boolean") return value;
-    if (typeof value === "string") {
-        const normalized = value.trim().toLowerCase();
-        if (normalized === "true") return true;
-        if (normalized === "false") return false;
-    }
-    return undefined;
-};
-
-const insertIntoDB = async (
-    user: IJwtPayload,
-    payload: {
-        scheduleIds: string[];
-    },
-) => {
-    if (!payload?.scheduleIds?.length) {
-        throw new ApiError(
-            httpsStatus.BAD_REQUEST,
-            "scheduleIds array is required and cannot be empty",
-        );
-    }
-
-    if (!user?.email) {
-        throw new ApiError(
-            httpsStatus.UNAUTHORIZED,
-            "Unauthorized: missing user email",
-        );
-    }
-
-    const doctor = await prisma.doctor.findFirst({
+const insertIntoDB = async (user: any, payload: {
+    scheduleIds: string[]
+}) => {
+    const doctorData = await prisma.doctor.findUniqueOrThrow({
         where: {
-            email: user.email,
-            isDeleted: false,
-        },
-        select: {
-            id: true,
-        },
+            email: user.email
+        }
     });
 
-    if (!doctor) {
-        throw new ApiError(
-            httpsStatus.NOT_FOUND,
-            "Doctor profile not found for this account",
-        );
-    }
+    const doctorScheduleData = payload.scheduleIds.map(scheduleId => ({
+        doctorId: doctorData.id,
+        scheduleId
+    }))
 
-    const schedules = await prisma.schedule.findMany({
-        where: {
-            id: {
-                in: payload.scheduleIds,
-            },
-        },
-        select: {
-            id: true,
-        },
+    const result = await prisma.doctorSchedules.createMany({
+        data: doctorScheduleData
     });
 
-    if (schedules.length !== payload.scheduleIds.length) {
-        throw new ApiError(
-            httpsStatus.BAD_REQUEST,
-            "One or more scheduleIds are invalid",
-        );
-    }
-
-    const doctorScheduleData = payload.scheduleIds.map((scheduleId) => ({
-        doctorId: doctor.id,
-        scheduleId,
-    }));
-
-    return await prisma.doctorSchedules.createMany({
-        data: doctorScheduleData,
-        skipDuplicates: true,
-    });
+    return result;
 };
 
-// doctor schedule show
-const schedulesForDoctor = async (
-    user: IJwtPayload,
+
+const getMySchedule = async (
     filters: any,
-    options: any,
+    options: IPaginationOptions,
+    user: IAuthUser
 ) => {
-    const { page, limit, skip, sortBy, sortOrder } =
-        paginationHelper.calculatePagination(options);
+    const { limit, page, skip } = paginationHelper.calculatePagination(options);
+    const { startDate, endDate, ...filterData } = filters;
 
-    if (!user?.email) {
-        throw new ApiError(
-            httpsStatus.UNAUTHORIZED,
-            "Unauthorized: missing user email",
-        );
-    }
+    const andConditions = [];
 
-    const startDateTime = toValidDateOrUndefined(
-        filters?.startDateTime ?? filters?.filterStartDateTime,
-    );
-    const endDateTime = toValidDateOrUndefined(
-        filters?.endDateTime ?? filters?.filterEndDateTime,
-    );
-    const isBooked = toBooleanOrUndefined(filters?.isBooked);
-    const scheduleId =
-        typeof filters?.scheduleId === "string"
-            ? filters.scheduleId
-            : undefined;
-
-    const andConditions: Prisma.DoctorSchedulesWhereInput[] = [];
-
-    if (typeof isBooked === "boolean") {
-        andConditions.push({ isBooked });
-    }
-
-    if (scheduleId) {
-        andConditions.push({ scheduleId });
-    }
-
-    if (startDateTime) {
+    if (startDate && endDate) {
         andConditions.push({
-            schedule: { startDateTime: { gte: startDateTime } },
+            AND: [
+                {
+                    schedule: {
+                        startDateTime: {
+                            gte: startDate
+                        }
+                    }
+                },
+                {
+                    schedule: {
+                        endDateTime: {
+                            lte: endDate
+                        }
+                    }
+                }
+            ]
+        })
+    };
+
+
+    if (Object.keys(filterData).length > 0) {
+
+        if (typeof filterData.isBooked === 'string' && filterData.isBooked === 'true') {
+            filterData.isBooked = true
+        }
+        else if (typeof filterData.isBooked === 'string' && filterData.isBooked === 'false') {
+            filterData.isBooked = false
+        }
+
+        andConditions.push({
+            AND: Object.keys(filterData).map(key => {
+                return {
+                    [key]: {
+                        equals: (filterData as any)[key],
+                    },
+                };
+            }),
         });
     }
 
-    if (endDateTime) {
-        andConditions.push({ schedule: { endDateTime: { lte: endDateTime } } });
-    }
+    const whereConditions: Prisma.DoctorSchedulesWhereInput =
+        andConditions.length > 0 ? { AND: andConditions } : {};
 
-    const whereConditions: Prisma.DoctorSchedulesWhereInput = {
-        doctor: {
-            email: user.email,
-            isDeleted: false,
-        },
-        ...(andConditions.length > 0 ? { AND: andConditions } : {}),
-    };
 
-    const orderBy: Prisma.DoctorSchedulesOrderByWithRelationInput =
-        sortBy === "startDateTime"
-            ? { schedule: { startDateTime: sortOrder } }
-            : sortBy === "endDateTime"
-              ? { schedule: { endDateTime: sortOrder } }
-              : sortBy === "isBooked"
-                ? { isBooked: sortOrder }
-                : sortBy === "updatedAt"
-                  ? { updatedAt: sortOrder }
-                  : { createdAt: sortOrder };
-
-    const data = await prisma.doctorSchedules.findMany({
+    const result = await prisma.doctorSchedules.findMany({
         where: whereConditions,
-        orderBy,
         skip,
         take: limit,
-        select: {
-            doctorId: true,
-            scheduleId: true,
-            isBooked: true,
-            createdAt: true,
-            updatedAt: true,
-            schedule: {
-                select: {
-                    id: true,
-                    startDateTime: true,
-                    endDateTime: true,
-                },
-            },
-        },
+        orderBy:
+            options.sortBy && options.sortOrder
+                ? { [options.sortBy]: options.sortOrder }
+                : {
+
+                }
+    });
+    const total = await prisma.doctorSchedules.count({
+        where: whereConditions
     });
 
+    return {
+        meta: {
+            total,
+            page,
+            limit,
+        },
+        data: result,
+    };
+};
+
+const deleteFromDB = async (user: IAuthUser, scheduleId: string) => {
+
+    const doctorData = await prisma.doctor.findUniqueOrThrow({
+        where: {
+            email: user?.email
+        }
+    });
+
+    const isBookedSchedule = await prisma.doctorSchedules.findFirst({
+        where: {
+            doctorId: doctorData.id,
+            scheduleId: scheduleId,
+            isBooked: true
+        }
+    });
+
+    if (isBookedSchedule) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "You can not delete the schedule because of the schedule is already booked!")
+    }
+
+    const result = await prisma.doctorSchedules.delete({
+        where: {
+            doctorId_scheduleId: {
+                doctorId: doctorData.id,
+                scheduleId: scheduleId
+            }
+        }
+    })
+    return result;
+
+}
+
+const getAllFromDB = async (
+    filters: IDoctorScheduleFilterRequest,
+    options: IPaginationOptions,
+) => {
+    const { limit, page, skip } = paginationHelper.calculatePagination(options);
+    const { searchTerm, ...filterData } = filters;
+    const andConditions = [];
+
+    if (searchTerm) {
+        andConditions.push({
+            doctor: {
+                name: {
+                    contains: searchTerm,
+                    mode: 'insensitive',
+                },
+            },
+        });
+    }
+
+    if (Object.keys(filterData).length > 0) {
+        if (typeof filterData.isBooked === 'string' && filterData.isBooked === 'true') {
+            filterData.isBooked = true;
+        } else if (typeof filterData.isBooked === 'string' && filterData.isBooked === 'false') {
+            filterData.isBooked = false;
+        }
+        andConditions.push({
+            AND: Object.keys(filterData).map((key) => ({
+                [key]: {
+                    equals: (filterData as any)[key]
+                }
+            }))
+        });
+    }
+
+    const whereConditions: any =
+        andConditions.length > 0 ? { AND: andConditions } : {};
+    const result = await prisma.doctorSchedules.findMany({
+        include: {
+            doctor: true,
+            schedule: true,
+        },
+        where: whereConditions,
+        skip,
+        take: limit,
+        orderBy:
+            options.sortBy && options.sortOrder
+                ? { [options.sortBy]: options.sortOrder }
+                : {},
+    });
     const total = await prisma.doctorSchedules.count({
         where: whereConditions,
     });
 
     return {
         meta: {
+            total,
             page,
             limit,
-            total,
         },
-        data,
+        data: result,
     };
 };
 
-// doctor schedule delete
-const deleteDoctorScheduleFromDB = async (
-    user: IJwtPayload,
-    scheduleId: string,
-) => {
-    if (!user?.email) {
-        throw new ApiError(
-            httpsStatus.UNAUTHORIZED,
-            "Unauthorized: missing user email",
-        );
-    }
-    if (!scheduleId) {
-        throw new ApiError(
-            httpsStatus.BAD_REQUEST,
-            "scheduleId parameter is required",
-        );
-    }
 
-    const doctor = await prisma.doctor.findFirst({
-        where: {
-            email: user.email,
-            isDeleted: false,
-        },
-        select: {
-            id: true,
-        },
-    });
 
-    if (!doctor) {
-        throw new ApiError(
-            httpsStatus.NOT_FOUND,
-            "Doctor profile not found for this account",
-        );
-    }
-
-    const result = await prisma.doctorSchedules.deleteMany({
-        where: {
-            doctorId: doctor.id,
-            scheduleId,
-        },
-    });
-
-    if (result.count === 0) {
-        throw new ApiError(
-            httpsStatus.NOT_FOUND,
-            "No matching doctor schedule found to delete",
-        );
-    }
-
-    return result;
-};
-
-export const doctorScheduleService = {
+export const DoctorScheduleService = {
     insertIntoDB,
-    schedulesForDoctor,
-    deleteDoctorScheduleFromDB,
-};
+    getMySchedule,
+    deleteFromDB,
+    getAllFromDB
+}

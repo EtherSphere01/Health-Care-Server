@@ -1,2 +1,8 @@
-// Only include fields that support `contains` (i.e. String fields).
-export const userSearchAbleFields = ["email"];
+export const userSearchAbleFields: string[] = ['email']; // only for search term
+
+export const userFilterableFields: string[] = [
+    'email',
+    'role',
+    'status',
+    'searchTerm'
+]; // for all filtering 
