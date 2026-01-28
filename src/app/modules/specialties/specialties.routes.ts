@@ -3,7 +3,7 @@ import { SpecialtiesController } from "./specialties.controller";
 import { SpecialtiesValidation } from "./specialties.validation";
 import auth from "../../middlewares/auth";
 import { UserRole } from "@prisma/client";
-import { fileUploader } from "../../helper/fileUploader";
+import { fileUploader } from "../../helpers/fileUploader";
 
 const router = express.Router();
 

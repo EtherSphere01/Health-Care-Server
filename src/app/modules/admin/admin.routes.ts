@@ -1,28 +1,41 @@
-import express from "express";
-import authMiddleware from "../../middlewares/auth";
+import express, { NextFunction, Request, Response } from "express";
+import { AdminController } from "./admin.controller";
+import validateRequest from "../../middlewares/validateRequest";
+import { adminValidationSchemas } from "./admin.validations";
+import auth from "../../middlewares/auth";
 import { UserRole } from "@prisma/client";
-import { adminController } from "./admin.controller";
 
 const router = express.Router();
 
-router.get("/", authMiddleware(UserRole.ADMIN), adminController.getAllFromDB);
+router.get(
+    "/",
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    AdminController.getAllFromDB,
+);
 
 router.get(
     "/:id",
-    authMiddleware(UserRole.ADMIN),
-    adminController.getByIdFromDB,
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    AdminController.getByIdFromDB,
 );
 
 router.patch(
     "/:id",
-    authMiddleware(UserRole.ADMIN),
-    adminController.updateIntoDB,
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    validateRequest(adminValidationSchemas.update),
+    AdminController.updateIntoDB,
 );
 
 router.delete(
     "/:id",
-    authMiddleware(UserRole.ADMIN),
-    adminController.deleteFromDB,
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    AdminController.deleteFromDB,
 );
 
-export const adminRoutes = router;
+router.delete(
+    "/soft/:id",
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    AdminController.softDeleteFromDB,
+);
+
+export const AdminRoutes = router;

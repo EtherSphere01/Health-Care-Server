@@ -1,68 +1,84 @@
-import { Request, Response } from "express";
-import catchAsync from "../../shared/catchAsync";
-import sendResponse from "../../shared/sendResponse";
-import pick from "../../helper/pick";
-import { IOptions } from "../../helper/paginationHelper";
+import { NextFunction, Request, RequestHandler, Response } from "express";
+import { AdminService } from "./admin.service";
+import pick from "../../../shared/pick";
 import { adminFilterableFields } from "./admin.constant";
-import { adminService } from "./admin.service";
+import sendResponse from "../../../shared/sendResponse";
+import httpStatus from "http-status";
+import catchAsync from "../../../shared/catchAsync";
 
-const getAllFromDB = catchAsync(async (req: Request, res: Response) => {
-    const options = pick(req.query, ["page", "limit", "sortBy", "sortOrder"]);
-    const filters = pick(req.query, adminFilterableFields);
+const getAllFromDB: RequestHandler = catchAsync(
+    async (req: Request, res: Response) => {
+        const filters = pick(req.query, adminFilterableFields);
+        const options = pick(req.query, [
+            "limit",
+            "page",
+            "sortBy",
+            "sortOrder",
+        ]);
+        const result = await AdminService.getAllFromDB(filters, options);
 
-    const result = await adminService.getAllFromDB(
-        filters,
-        options as IOptions,
-    );
-
-    sendResponse(res, {
-        statusCode: 200,
-        success: true,
-        message: "Admins fetched successfully",
-        meta: result.meta,
-        data: result.data,
-    });
-});
+        sendResponse(res, {
+            statusCode: httpStatus.OK,
+            success: true,
+            message: "Admin data fetched!",
+            meta: result.meta,
+            data: result.data,
+        });
+    },
+);
 
 const getByIdFromDB = catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const result = await adminService.getByIdFromDB(id as string);
 
+    const result = await AdminService.getByIdFromDB(id);
     sendResponse(res, {
-        statusCode: 200,
+        statusCode: httpStatus.OK,
         success: true,
-        message: "Admin fetched successfully",
+        message: "Admin data fetched by id!",
         data: result,
     });
 });
 
 const updateIntoDB = catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const result = await adminService.updateIntoDB(id as string, req.body);
 
+    const result = await AdminService.updateIntoDB(id, req.body);
     sendResponse(res, {
-        statusCode: 200,
+        statusCode: httpStatus.OK,
         success: true,
-        message: "Admin updated successfully",
+        message: "Admin data updated!",
         data: result,
     });
 });
 
 const deleteFromDB = catchAsync(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const result = await adminService.deleteFromDB(id as string);
 
+    const result = await AdminService.deleteFromDB(id);
     sendResponse(res, {
-        statusCode: 200,
+        statusCode: httpStatus.OK,
         success: true,
-        message: "Admin deleted successfully",
+        message: "Admin data deleted!",
         data: result,
     });
 });
 
-export const adminController = {
+const softDeleteFromDB = catchAsync(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const result = await AdminService.softDeleteFromDB(id);
+    sendResponse(res, {
+        statusCode: httpStatus.OK,
+        success: true,
+        message: "Admin data deleted!",
+        data: result,
+    });
+});
+
+export const AdminController = {
     getAllFromDB,
     getByIdFromDB,
     updateIntoDB,
     deleteFromDB,
+    softDeleteFromDB,
 };

@@ -3,7 +3,7 @@ import catchAsync from "../../shared/catchAsync";
 import { doctorScheduleService } from "./doctorSchedule.service";
 import sendResponse from "../../shared/sendResponse";
 import { IJwtPayload } from "../../types/common";
-import pick from "../../helper/pick";
+import pick from "../../helpers/pick";
 
 const insertIntoDB = catchAsync(
     async (req: Request & { user?: IJwtPayload }, res: Response) => {

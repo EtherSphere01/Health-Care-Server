@@ -2,8 +2,8 @@ import bcrypt from "bcryptjs";
 import config from "../../../config";
 import { prisma } from "../../shared/prisma";
 import { Request } from "express";
-import { fileUploader } from "../../helper/fileUploader";
-import { paginationHelper } from "../../helper/paginationHelper";
+import { fileUploader } from "../../helpers/fileUploader";
+import { paginationHelper } from "../../helpers/paginationHelper";
 import { Prisma } from "@prisma/client";
 import { userSearchAbleFields } from "./user.constant";
 

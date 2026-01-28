@@ -1,8 +1,8 @@
 import { prisma } from "../../shared/prisma";
 import { IJwtPayload } from "../../types/common";
-import { paginationHelper } from "../../helper/paginationHelper";
+import { paginationHelper } from "../../helpers/paginationHelper";
 import { Prisma } from "@prisma/client";
-import ApiError from "../../errors/apiError";
+import ApiError from "../../errors/ApiError";
 import httpsStatus from "http-status";
 
 const toValidDateOrUndefined = (value: unknown): Date | undefined => {

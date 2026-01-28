@@ -1,111 +1,42 @@
-import { UserRole } from "@prisma/client";
 import { NextFunction, Request, Response } from "express";
-import { jwtHelper } from "../helper/jwtHelper";
+import httpStatus from "http-status";
+import { Secret } from "jsonwebtoken";
 import config from "../../config";
-import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
-import { prisma } from "../shared/prisma";
-import { UserStatus } from "@prisma/client";
-import httpsStatus from "http-status";
-import ApiError from "../errors/apiError";
+import { jwtHelpers } from "../../helpers/jwtHelpers";
+import ApiError from "../errors/ApiError";
 
-const authMiddleware = (...roles: string[]) => {
+const auth = (...roles: string[]) => {
     return async (
         req: Request & { user?: any },
         res: Response,
         next: NextFunction,
     ) => {
         try {
-            const issueNewAccessTokenFromRefresh = async () => {
-                const refreshToken = req.cookies?.refreshToken;
-                if (!refreshToken) {
-                    throw new ApiError(
-                        httpsStatus.UNAUTHORIZED,
-                        "Unauthorized: No refresh token provided",
-                    );
-                }
+            const token = req.headers.authorization || req.cookies.accessToken;
+            console.log({ token }, "from auth guard");
 
-                const decodedRefresh = jwt.verify(
-                    refreshToken,
-                    config.jwt.refresh_secret_key!,
-                ) as JwtPayload;
-
-                const user = await prisma.user.findFirst({
-                    where: {
-                        id: decodedRefresh.userId as string,
-                        email: decodedRefresh.email as string,
-                        userStatus: UserStatus.ACTIVE,
-                    },
-                    select: {
-                        id: true,
-                        email: true,
-                        role: true,
-                    },
-                });
-
-                if (!user) {
-                    throw new ApiError(
-                        httpsStatus.UNAUTHORIZED,
-                        "Unauthorized: User not found",
-                    );
-                }
-
-                const tokenPayload = {
-                    userId: user.id,
-                    email: user.email,
-                    role: user.role,
-                };
-
-                const newAccessToken = jwtHelper.generateToken(
-                    tokenPayload,
-                    config.jwt
-                        .access_token_expires_in as SignOptions["expiresIn"],
-                    config.jwt.access_secret_key as jwt.Secret,
-                );
-
-                res.cookie("accessToken", newAccessToken, {
-                    secure: true,
-                    httpOnly: true,
-                    sameSite: "none",
-                    maxAge: 1000 * 60 * 15,
-                });
-
-                return tokenPayload;
-            };
-
-            const accessToken = req.cookies?.accessToken;
-            if (!accessToken) {
-                req.user = await issueNewAccessTokenFromRefresh();
-            } else {
-                try {
-                    const decodedAccess = jwt.verify(
-                        accessToken,
-                        config.jwt.access_secret_key!,
-                    );
-                    req.user = decodedAccess;
-                } catch (error: any) {
-                    if (error?.name === "TokenExpiredError") {
-                        req.user = await issueNewAccessTokenFromRefresh();
-                    } else {
-                        throw new ApiError(
-                            httpsStatus.UNAUTHORIZED,
-                            "Unauthorized: Invalid access token",
-                        );
-                    }
-                }
-            }
-
-            if (!roles.includes(req.user.role)) {
+            if (!token) {
                 throw new ApiError(
-                    httpsStatus.FORBIDDEN,
-                    "Forbidden: You don't have enough permission to access this resource",
+                    httpStatus.UNAUTHORIZED,
+                    "You are not authorized!",
                 );
             }
 
-            return next();
-        } catch (error) {
-            next(error);
+            const verifiedUser = jwtHelpers.verifyToken(
+                token,
+                config.jwt.jwt_secret as Secret,
+            );
+
+            req.user = verifiedUser;
+
+            if (roles.length && !roles.includes(verifiedUser.role)) {
+                throw new ApiError(httpStatus.FORBIDDEN, "Forbidden!");
+            }
+            next();
+        } catch (err) {
+            next(err);
         }
     };
 };
 
-export default authMiddleware;
+export default auth;

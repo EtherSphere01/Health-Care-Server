@@ -9,8 +9,8 @@ const validateRequest =
                 body: req.body,
             });
             return next();
-        } catch (error) {
-            next(error);
+        } catch (err) {
+            next(err);
         }
     };
 

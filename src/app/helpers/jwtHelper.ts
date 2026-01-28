@@ -1,6 +1,6 @@
 import jwt, { type Secret, type SignOptions } from "jsonwebtoken";
 import config from "../../config";
-import ApiError from "../errors/apiError";
+import ApiError from "../errors/ApiError";
 import httpsStatus from "http-status";
 
 const generateToken = (

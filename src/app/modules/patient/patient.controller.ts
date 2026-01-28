@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import catchAsync from "../../shared/catchAsync";
 import sendResponse from "../../shared/sendResponse";
-import pick from "../../helper/pick";
-import { IOptions } from "../../helper/paginationHelper";
+import pick from "../../helpers/pick";
+import { IOptions } from "../../helpers/paginationHelper";
 import { patientFilterableFields } from "./patient.constant";
 import { patientService } from "./patient.service";
 import { IJwtPayload } from "../../types/common";

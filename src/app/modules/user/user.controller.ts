@@ -2,7 +2,7 @@ import catchAsync from "../../shared/catchAsync";
 import { Request, Response } from "express";
 import { userService } from "./user.service";
 import sendResponse from "../../shared/sendResponse";
-import pick from "../../helper/pick";
+import pick from "../../helpers/pick";
 
 const createPatient = catchAsync(async (req: Request, res: Response) => {
     const result = await userService.createPatient(req);

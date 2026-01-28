@@ -1,5 +1,5 @@
 import { Request } from "express";
-import { fileUploader } from "../../helper/fileUploader";
+import { fileUploader } from "../../helpers/fileUploader";
 import { prisma } from "../../shared/prisma";
 import { Specialties } from "@prisma/client";
 

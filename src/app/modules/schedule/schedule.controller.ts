@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import catchAsync from "../../shared/catchAsync";
 import sendResponse from "../../shared/sendResponse";
 import { scheduleService } from "./schedule.service";
-import pick from "../../helper/pick";
+import pick from "../../helpers/pick";
 import { IJwtPayload } from "../../types/common";
 
 const schedulesForDoctor = catchAsync(
