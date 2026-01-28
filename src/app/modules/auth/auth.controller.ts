@@ -28,6 +28,27 @@ const login = catchAsync(async (req: Request, res: Response) => {
     });
 });
 
+const logout = catchAsync(async (req: Request, res: Response) => {
+    await authService.logout();
+    res.clearCookie("accessToken", {
+        secure: true,
+        httpOnly: true,
+        sameSite: "none",
+    });
+    res.clearCookie("refreshToken", {
+        secure: true,
+        httpOnly: true,
+        sameSite: "none",
+    });
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: "Logout successful",
+        data: null,
+    });
+});
+
 export const authController = {
     login,
+    logout,
 };

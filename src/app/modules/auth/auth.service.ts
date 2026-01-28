@@ -52,6 +52,14 @@ const login = async (payload: { email: string; password: string }) => {
     }
 };
 
+const logout = async () => {
+    // In a stateless JWT authentication, logout can be handled on the client side
+    // by simply deleting the tokens. If you want to implement token blacklisting,
+    // you would need to store the tokens in a database or cache and mark them as invalid.
+    return;
+};
+
 export const authService = {
     login,
+    logout,
 };
