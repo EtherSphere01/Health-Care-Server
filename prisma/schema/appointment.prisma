@@ -9,17 +9,15 @@ model Appointment {
   scheduleId String   @unique
   schedule   Schedule @relation(fields: [scheduleId], references: [id])
 
-  videoCallingId            String
-  status                    AppointmentStatus @default(SCHEDULED)
-  paymentStatus             PaymentStatus     @default(UNPAID)
-  createdAt                 DateTime          @default(now())
-  updatedAt                 DateTime          @updatedAt
-  doctorSchedules           DoctorSchedules?  @relation(fields: [doctorSchedulesDoctorId, doctorSchedulesScheduleId], references: [doctorId, scheduleId])
-  payment                   Payment?
-  prescription              Prescription?
-  review                    Review?
-  doctorSchedulesDoctorId   String?
-  doctorSchedulesScheduleId String?
+  videoCallingId  String
+  status          AppointmentStatus @default(SCHEDULED)
+  paymentStatus   PaymentStatus     @default(UNPAID)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  doctorSchedules DoctorSchedules?
+  payment         Payment?
+  prescription    Prescription?
+  review          Review?
 
   @@map("appointments")
 }

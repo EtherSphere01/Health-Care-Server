@@ -2,17 +2,23 @@ model Specialties {
     id                String              @id @default(uuid())
     title             String
     icon              String
+    createdAt         DateTime            @default(now())
+    updatedAt         DateTime            @updatedAt
     doctorSpecialties DoctorSpecialties[]
 
     @@map("specialties")
 }
 
 model DoctorSpecialties {
-    specialtiesId String
-    specialties   Specialties @relation(fields: [specialtiesId], references: [id])
-    doctorId      String
-    doctor        Doctor      @relation(fields: [doctorId], references: [id])
+    specialitiesId String
+    specialities   Specialties @relation(fields: [specialitiesId], references: [id])
 
-    @@id([specialtiesId, doctorId])
+    doctorId String
+    doctor   Doctor @relation(fields: [doctorId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@id([specialitiesId, doctorId])
     @@map("doctor_specialties")
 }

@@ -11,14 +11,19 @@ model Schedule {
 }
 
 model DoctorSchedules {
-    doctorId     String
-    doctor       Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-    schedule     Schedule      @relation(fields: [scheduleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-    scheduleId   String
-    isBooked     Boolean       @default(false)
-    createdAt    DateTime      @default(now())
-    updatedAt    DateTime      @updatedAt
-    appointments Appointment[]
+    doctorId String
+    doctor   Doctor @relation(fields: [doctorId], references: [id])
+
+    scheduleId String
+    schedule   Schedule @relation(fields: [scheduleId], references: [id])
+
+    isBooked Boolean @default(false)
+
+    appointmentId String?      @unique
+    appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
     @@id([doctorId, scheduleId])
     @@map("doctor_schedules")
