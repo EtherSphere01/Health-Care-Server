@@ -52,8 +52,8 @@ Before getting started, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-repo/healthcare-backend.git
-cd healthcare-backend
+git clone https://github.com/EtherSphere01/Health-Care-Server.git
+cd Health-Care-Server
 ```
 
 ### 2. Install Dependencies
