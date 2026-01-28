@@ -5,18 +5,20 @@ model Schedule {
     createdAt       DateTime          @default(now())
     updatedAt       DateTime          @updatedAt
     doctorSchedules DoctorSchedules[]
+    appointment     Appointment?
 
     @@map("schedules")
 }
 
 model DoctorSchedules {
-    doctorId   String
-    doctor     Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-    schedule   Schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-    scheduleId String
-    isBooked   Boolean  @default(false)
-    createdAt  DateTime @default(now())
-    updatedAt  DateTime @updatedAt
+    doctorId     String
+    doctor       Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    schedule     Schedule      @relation(fields: [scheduleId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    scheduleId   String
+    isBooked     Boolean       @default(false)
+    createdAt    DateTime      @default(now())
+    updatedAt    DateTime      @updatedAt
+    appointments Appointment[]
 
     @@id([doctorId, scheduleId])
     @@map("doctor_schedules")

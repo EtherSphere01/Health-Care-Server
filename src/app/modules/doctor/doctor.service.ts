@@ -7,6 +7,9 @@ import { UserStatus } from "@prisma/client";
 import { IJwtPayload } from "../../types/common";
 import httpStatus from "http-status";
 import AppError from "../../errors/AppError";
+import ApiError from "../../errors/apiError";
+import { openai } from "../../helper/open-router";
+import { extractJsonFromMessage } from "../../helper/extractJsonFromMessage";
 
 const getAllFromDB = async (filters: any, options: IOptions) => {
     const { page, limit, skip, sortBy, sortOrder } =
@@ -219,9 +222,51 @@ const deleteFromDB = async (id: string) => {
     });
 };
 
+const getAISuggestions = async (payload: { symptoms: string }) => {
+    if (!(payload && payload.symptoms)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Symptoms are required");
+    }
+
+    const doctors = await prisma.doctor.findMany({
+        where: { isDeleted: false },
+        include: {
+            doctorSpecialties: {
+                include: {
+                    specialties: true,
+                },
+            },
+        },
+    });
+
+    const prompt = `
+            You are a medical assistant AI. Based on the patient's symptoms, suggest the top 3 most suitable doctors.
+            Each doctor has specialties and years of experience. Only suggest doctors who are relevant to the given symptoms. Symptoms: ${payload.symptoms} Here is the doctor list (in JSON): ${JSON.stringify(doctors, null, 2)} Return your response in JSON format with full individual doctor data.`;
+
+    console.log("analyzing......\n");
+
+    const completion = await openai.chat.completions.create({
+        model: "tngtech/deepseek-r1t2-chimera:free",
+        messages: [
+            {
+                role: "system",
+                content:
+                    "You are a helpful AI medical assistant that provides doctor suggestions.",
+            },
+            {
+                role: "user",
+                content: prompt,
+            },
+        ],
+    });
+
+    const result = await extractJsonFromMessage(completion.choices[0].message);
+    return result;
+};
+
 export const doctorService = {
     getAllFromDB,
     updateIntoDB,
     getByIdFromDB,
     deleteFromDB,
+    getAISuggestions,
 };

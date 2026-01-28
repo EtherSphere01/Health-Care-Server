@@ -7,6 +7,8 @@ const router = express.Router();
 
 router.get("/", doctorController.getAllFromDB);
 
+router.post("/suggestion", doctorController.getAISuggestions);
+
 router.get(
     "/:id",
     authMiddleware(UserRole.ADMIN, UserRole.DOCTOR),
