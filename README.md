@@ -2,7 +2,6 @@
 
 Short description: A scalable TypeScript + Express + Prisma REST API for healthcare management (users, scheduling, appointments, payments, prescriptions, and reviews).
 
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
 ![Node.js](https://img.shields.io/badge/Node.js-v18+-green)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue)
 ![Prisma](https://img.shields.io/badge/Prisma-ORM-teal)
@@ -355,9 +354,3 @@ _(Ensure ERD.jpg is present in your project root)_
 3. Commit your changes (git commit \-m 'Add some AmazingFeature')
 4. Push to the branch (git push origin feature/AmazingFeature)
 5. Open a Pull Request
-
----
-
-## 📝 License
-
-This project is licensed under the MIT License.
