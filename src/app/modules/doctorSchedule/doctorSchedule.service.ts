@@ -2,6 +2,8 @@ import { prisma } from "../../shared/prisma";
 import { IJwtPayload } from "../../types/common";
 import { paginationHelper } from "../../helper/paginationHelper";
 import { Prisma } from "@prisma/client";
+import ApiError from "../../errors/apiError";
+import httpsStatus from "http-status";
 
 const toValidDateOrUndefined = (value: unknown): Date | undefined => {
     if (!value) return undefined;
@@ -32,11 +34,17 @@ const insertIntoDB = async (
     },
 ) => {
     if (!payload?.scheduleIds?.length) {
-        throw new Error("scheduleIds is required");
+        throw new ApiError(
+            httpsStatus.BAD_REQUEST,
+            "scheduleIds array is required and cannot be empty",
+        );
     }
 
     if (!user?.email) {
-        throw new Error("Unauthorized: missing user email");
+        throw new ApiError(
+            httpsStatus.UNAUTHORIZED,
+            "Unauthorized: missing user email",
+        );
     }
 
     const doctor = await prisma.doctor.findFirst({
@@ -50,7 +58,10 @@ const insertIntoDB = async (
     });
 
     if (!doctor) {
-        throw new Error("Doctor profile not found for this account");
+        throw new ApiError(
+            httpsStatus.NOT_FOUND,
+            "Doctor profile not found for this account",
+        );
     }
 
     const schedules = await prisma.schedule.findMany({
@@ -65,7 +76,10 @@ const insertIntoDB = async (
     });
 
     if (schedules.length !== payload.scheduleIds.length) {
-        throw new Error("One or more scheduleIds are invalid");
+        throw new ApiError(
+            httpsStatus.BAD_REQUEST,
+            "One or more scheduleIds are invalid",
+        );
     }
 
     const doctorScheduleData = payload.scheduleIds.map((scheduleId) => ({
@@ -89,7 +103,10 @@ const schedulesForDoctor = async (
         paginationHelper.calculatePagination(options);
 
     if (!user?.email) {
-        throw new Error("Unauthorized: missing user email");
+        throw new ApiError(
+            httpsStatus.UNAUTHORIZED,
+            "Unauthorized: missing user email",
+        );
     }
 
     const startDateTime = toValidDateOrUndefined(
@@ -184,10 +201,16 @@ const deleteDoctorScheduleFromDB = async (
     scheduleId: string,
 ) => {
     if (!user?.email) {
-        throw new Error("Unauthorized: missing user email");
+        throw new ApiError(
+            httpsStatus.UNAUTHORIZED,
+            "Unauthorized: missing user email",
+        );
     }
     if (!scheduleId) {
-        throw new Error("scheduleId is required");
+        throw new ApiError(
+            httpsStatus.BAD_REQUEST,
+            "scheduleId parameter is required",
+        );
     }
 
     const doctor = await prisma.doctor.findFirst({
@@ -201,7 +224,10 @@ const deleteDoctorScheduleFromDB = async (
     });
 
     if (!doctor) {
-        throw new Error("Doctor profile not found for this account");
+        throw new ApiError(
+            httpsStatus.NOT_FOUND,
+            "Doctor profile not found for this account",
+        );
     }
 
     const result = await prisma.doctorSchedules.deleteMany({
@@ -212,7 +238,10 @@ const deleteDoctorScheduleFromDB = async (
     });
 
     if (result.count === 0) {
-        throw new Error("Doctor schedule not found");
+        throw new ApiError(
+            httpsStatus.NOT_FOUND,
+            "No matching doctor schedule found to delete",
+        );
     }
 
     return result;

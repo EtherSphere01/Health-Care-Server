@@ -13,13 +13,13 @@ router.get(
 
 router.post(
     "/",
-    authMiddleware(UserRole.ADMIN, UserRole.DOCTOR),
+    authMiddleware(UserRole.ADMIN),
     scheduleController.insertIntoDB,
 );
 
 router.delete(
     "/:id",
-    authMiddleware(UserRole.ADMIN, UserRole.DOCTOR),
+    authMiddleware(UserRole.ADMIN),
     scheduleController.deleteScheduleFromDB,
 );
 

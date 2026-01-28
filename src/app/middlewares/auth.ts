@@ -5,6 +5,8 @@ import config from "../../config";
 import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
 import { prisma } from "../shared/prisma";
 import { UserStatus } from "@prisma/client";
+import httpsStatus from "http-status";
+import ApiError from "../errors/apiError";
 
 const authMiddleware = (...roles: string[]) => {
     return async (
@@ -16,7 +18,10 @@ const authMiddleware = (...roles: string[]) => {
             const issueNewAccessTokenFromRefresh = async () => {
                 const refreshToken = req.cookies?.refreshToken;
                 if (!refreshToken) {
-                    throw new Error("Unauthorized: No token provided");
+                    throw new ApiError(
+                        httpsStatus.UNAUTHORIZED,
+                        "Unauthorized: No refresh token provided",
+                    );
                 }
 
                 const decodedRefresh = jwt.verify(
@@ -38,7 +43,10 @@ const authMiddleware = (...roles: string[]) => {
                 });
 
                 if (!user) {
-                    throw new Error("Unauthorized: Invalid refresh token");
+                    throw new ApiError(
+                        httpsStatus.UNAUTHORIZED,
+                        "Unauthorized: User not found",
+                    );
                 }
 
                 const tokenPayload = {
@@ -78,13 +86,17 @@ const authMiddleware = (...roles: string[]) => {
                     if (error?.name === "TokenExpiredError") {
                         req.user = await issueNewAccessTokenFromRefresh();
                     } else {
-                        throw new Error("Unauthorized: Invalid token");
+                        throw new ApiError(
+                            httpsStatus.UNAUTHORIZED,
+                            "Unauthorized: Invalid access token",
+                        );
                     }
                 }
             }
 
             if (!roles.includes(req.user.role)) {
-                throw new Error(
+                throw new ApiError(
+                    httpsStatus.FORBIDDEN,
                     "Forbidden: You don't have enough permission to access this resource",
                 );
             }

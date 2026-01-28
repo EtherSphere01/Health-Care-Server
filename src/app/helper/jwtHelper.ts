@@ -1,5 +1,7 @@
 import jwt, { type Secret, type SignOptions } from "jsonwebtoken";
 import config from "../../config";
+import ApiError from "../errors/apiError";
+import httpsStatus from "http-status";
 
 const generateToken = (
     payload: any,
@@ -19,7 +21,10 @@ const verifyToken = (token: string, secret: Secret) => {
         const decoded = jwt.verify(token, secret);
         return decoded;
     } catch (error) {
-        throw new Error("Invalid or expired token");
+        throw new ApiError(
+            httpsStatus.UNAUTHORIZED,
+            "Invalid or expired token",
+        );
     }
 };
 

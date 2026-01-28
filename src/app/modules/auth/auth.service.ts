@@ -4,6 +4,8 @@ import bcrypt from "bcryptjs";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import config from "../../../config";
 import { jwtHelper } from "../../helper/jwtHelper";
+import ApiError from "../../errors/apiError";
+import httpStatus from "http-status";
 
 const login = async (payload: { email: string; password: string }) => {
     const user = await prisma.user.findUniqueOrThrow({
@@ -19,7 +21,7 @@ const login = async (payload: { email: string; password: string }) => {
             user.password,
         );
         if (!passwordMatch) {
-            throw new Error("Invalid credentials");
+            throw new ApiError(httpStatus.BAD_REQUEST, "Invalid credentials");
         }
 
         const tokenPayload = {
@@ -46,7 +48,7 @@ const login = async (payload: { email: string; password: string }) => {
             needPasswordChange: user.needPasswordChange,
         };
     } else {
-        throw new Error("User not found");
+        throw new ApiError(httpStatus.BAD_REQUEST, "Invalid credentials");
     }
 };
 
