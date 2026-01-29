@@ -328,7 +328,7 @@ _Doctors assign master slots to their own calendar._
 
 ## 🗄️ Database Schema (ERD)
 
-![ERD](ERD.png)
+_(Ensure ERD.jpg is present in your project root)_
 
 ---
 
