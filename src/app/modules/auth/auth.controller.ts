@@ -149,9 +149,9 @@ REFRESH_TOKEN_EXPIRES_IN=1y
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
-        message: "Access token genereated successfully!",
+        message: "Access token generated successfully!",
         data: {
-            message: "Access token genereated successfully!",
+            message: "Access token generated successfully!",
         },
     });
 });
