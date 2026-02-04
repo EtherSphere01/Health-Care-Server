@@ -13,7 +13,6 @@ const auth = (...roles: string[]) => {
     ) => {
         try {
             const token = req.headers.authorization || req.cookies.accessToken;
-            console.log({ token }, "from auth guard");
 
             if (!token) {
                 throw new ApiError(

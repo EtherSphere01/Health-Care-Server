@@ -160,6 +160,16 @@ const createPatient = async (req: Request): Promise<Patient> => {
         Number(config.salt_round),
     );
 
+    const existingUser = await prisma.user.findUnique({
+        where: {
+            email: req.body.patient.email,
+        },
+    });
+
+    if (existingUser) {
+        throw new Error("User with this email already exists");
+    }
+
     const userData = {
         email: req.body.patient.email,
         password: hashedPassword,
