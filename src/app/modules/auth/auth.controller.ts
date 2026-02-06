@@ -6,6 +6,7 @@ import sendResponse from "../../../shared/sendResponse";
 import { AuthServices } from "./auth.service";
 
 const loginUser = catchAsync(async (req: Request, res: Response) => {
+    const isProd = config.env === "production";
     const accessTokenExpiresIn = config.jwt.expires_in as string;
     const refreshTokenExpiresIn = config.jwt.refresh_token_expires_in as string;
 
@@ -55,15 +56,15 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
     const result = await AuthServices.loginUser(req.body);
     const { refreshToken, accessToken } = result;
     res.cookie("accessToken", accessToken, {
-        secure: true,
+        secure: isProd,
         httpOnly: true,
-        sameSite: "none",
+        sameSite: isProd ? "none" : "lax",
         maxAge: accessTokenMaxAge,
     });
     res.cookie("refreshToken", refreshToken, {
-        secure: true,
+        secure: isProd,
         httpOnly: true,
-        sameSite: "none",
+        sameSite: isProd ? "none" : "lax",
         maxAge: refreshTokenMaxAge,
     });
 
@@ -73,12 +74,17 @@ const loginUser = catchAsync(async (req: Request, res: Response) => {
         message: "Logged in successfully!",
         data: {
             needPasswordChange: result.needPasswordChange,
+            accessToken,
+            refreshToken,
         },
     });
 });
 
 const refreshToken = catchAsync(async (req: Request, res: Response) => {
-    const { refreshToken } = req.cookies;
+    const cookieRefreshToken = req.cookies.refreshToken;
+    const bodyRefreshToken = (req.body as { refreshToken?: string } | undefined)
+        ?.refreshToken;
+    const refreshToken = cookieRefreshToken || bodyRefreshToken;
     /*
   EXPIRES_IN=7d 
 
@@ -133,16 +139,16 @@ REFRESH_TOKEN_EXPIRES_IN=1y
 
     const result = await AuthServices.refreshToken(refreshToken);
     res.cookie("accessToken", result.accessToken, {
-        secure: true,
+        secure: config.env === "production",
         httpOnly: true,
-        sameSite: "none",
+        sameSite: config.env === "production" ? "none" : "lax",
         maxAge: accessTokenMaxAge,
     });
 
     res.cookie("refreshToken", result.refreshToken, {
-        secure: true,
+        secure: config.env === "production",
         httpOnly: true,
-        sameSite: "none",
+        sameSite: config.env === "production" ? "none" : "lax",
         maxAge: refreshTokenMaxAge,
     });
 
@@ -151,7 +157,8 @@ REFRESH_TOKEN_EXPIRES_IN=1y
         success: true,
         message: "Access token generated successfully!",
         data: {
-            message: "Access token generated successfully!",
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
         },
     });
 });
@@ -172,25 +179,51 @@ const changePassword = catchAsync(
 );
 
 const forgotPassword = catchAsync(async (req: Request, res: Response) => {
-    await AuthServices.forgotPassword(req.body);
+    const isTestMode = process.env.ENABLE_TEST_ENDPOINTS === "1";
+    const result = await AuthServices.forgotPassword(req.body);
 
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
         message: "Check your email!",
-        data: null,
+        data: isTestMode ? (result ?? null) : null,
     });
 });
 
 const resetPassword = catchAsync(
     async (req: Request & { user?: any }, res: Response) => {
-        // Extract token from Authorization header (remove "Bearer " prefix)
+        // Accept token from Authorization header OR request body (Postman collection uses body.token)
         const authHeader = req.headers.authorization;
-        console.log({ authHeader });
-        const token = authHeader ? authHeader.replace("Bearer ", "") : null;
+        const tokenFromHeader = authHeader
+            ? authHeader.replace("Bearer ", "")
+            : null;
+
+        const tokenFromBody =
+            typeof (req.body as any)?.token === "string"
+                ? String((req.body as any).token)
+                : null;
+
+        // Prefer body token (forgot-password flow) over Authorization header.
+        const token = tokenFromBody ?? tokenFromHeader;
         const user = req.user; // Will be populated if authenticated via middleware
 
-        await AuthServices.resetPassword(token, req.body, user);
+        // Normalize payload field names (collection uses newPassword)
+        const password =
+            typeof (req.body as any)?.password === "string"
+                ? String((req.body as any).password)
+                : typeof (req.body as any)?.newPassword === "string"
+                  ? String((req.body as any).newPassword)
+                  : undefined;
+
+        const payload = {
+            email:
+                typeof (req.body as any)?.email === "string"
+                    ? String((req.body as any).email)
+                    : undefined,
+            password,
+        };
+
+        await AuthServices.resetPassword(token, payload, user);
 
         sendResponse(res, {
             statusCode: httpStatus.OK,
@@ -203,7 +236,18 @@ const resetPassword = catchAsync(
 
 const getMe = catchAsync(
     async (req: Request & { user?: any }, res: Response) => {
-        const user = req.cookies;
+        const authHeader = req.headers.authorization;
+        const rawHeaderToken =
+            typeof authHeader === "string" ? authHeader : undefined;
+        const tokenFromHeader = rawHeaderToken?.startsWith("Bearer ")
+            ? rawHeaderToken.slice("Bearer ".length)
+            : rawHeaderToken;
+
+        const accessToken = req.cookies.accessToken || tokenFromHeader;
+
+        const user = {
+            accessToken,
+        };
 
         const result = await AuthServices.getMe(user);
 
@@ -216,6 +260,36 @@ const getMe = catchAsync(
     },
 );
 
+const requestPatientRegistrationOtp = catchAsync(
+    async (req: Request, res: Response) => {
+        const result = await AuthServices.requestPatientRegistrationOtp(
+            req.body,
+        );
+
+        sendResponse(res, {
+            statusCode: httpStatus.OK,
+            success: true,
+            message: "OTP sent to your email",
+            data: result,
+        });
+    },
+);
+
+const verifyPatientRegistrationOtp = catchAsync(
+    async (req: Request, res: Response) => {
+        const result = await AuthServices.verifyPatientRegistrationOtp(
+            req.body,
+        );
+
+        sendResponse(res, {
+            statusCode: httpStatus.OK,
+            success: true,
+            message: "Account created successfully",
+            data: result,
+        });
+    },
+);
+
 export const AuthController = {
     loginUser,
     refreshToken,
@@ -223,4 +297,6 @@ export const AuthController = {
     forgotPassword,
     resetPassword,
     getMe,
+    requestPatientRegistrationOtp,
+    verifyPatientRegistrationOtp,
 };

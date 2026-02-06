@@ -8,13 +8,28 @@ import {
 } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import { Request } from "express";
+import httpStatus from "http-status";
 import config from "../../../config";
 import { fileUploader } from "../../../helpers/fileUploader";
 import { paginationHelper } from "../../../helpers/paginationHelper";
 import prisma from "../../../shared/prisma";
 import { IAuthUser } from "../../interfaces/common";
 import { IPaginationOptions } from "../../interfaces/pagination";
+import ApiError from "../../errors/ApiError";
 import { userSearchAbleFields } from "./user.constant";
+
+function pickAllowed<T extends Record<string, unknown>>(
+    input: T,
+    allowedKeys: string[],
+) {
+    const out: Record<string, unknown> = {};
+    for (const key of allowedKeys) {
+        if (Object.prototype.hasOwnProperty.call(input, key)) {
+            out[key] = input[key];
+        }
+    }
+    return out;
+}
 
 const createAdmin = async (req: Request): Promise<Admin> => {
     const file = req.file;
@@ -282,7 +297,7 @@ const changeProfileStatus = async (id: string, status: UserRole) => {
 };
 
 const getMyProfile = async (user: IAuthUser) => {
-    const userInfo = await prisma.user.findUniqueOrThrow({
+    const result = await prisma.user.findUniqueOrThrow({
         where: {
             email: user?.email,
             status: UserStatus.ACTIVE,
@@ -293,104 +308,74 @@ const getMyProfile = async (user: IAuthUser) => {
             needPasswordChange: true,
             role: true,
             status: true,
+            createdAt: true,
+            updatedAt: true,
+            admin: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    profilePhoto: true,
+                    contactNumber: true,
+                    isDeleted: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+            },
+            doctor: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    profilePhoto: true,
+                    contactNumber: true,
+                    address: true,
+                    registrationNumber: true,
+                    experience: true,
+                    gender: true,
+                    appointmentFee: true,
+                    qualification: true,
+                    currentWorkingPlace: true,
+                    designation: true,
+                    averageRating: true,
+                    isDeleted: true,
+                    createdAt: true,
+                    updatedAt: true,
+                    doctorSpecialties: {
+                        include: {
+                            specialities: true,
+                        },
+                    },
+                },
+            },
+            patient: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    profilePhoto: true,
+                    contactNumber: true,
+                    address: true,
+                    isDeleted: true,
+                    createdAt: true,
+                    updatedAt: true,
+                    patientHealthData: true,
+                    medicalReport: {
+                        select: {
+                            id: true,
+                            patientId: true,
+                            reportName: true,
+                            reportLink: true,
+                            createdAt: true,
+                            updatedAt: true,
+                        },
+                    },
+                },
+            },
         },
     });
 
-    let profileInfo;
-
-    if (userInfo.role === UserRole.SUPER_ADMIN) {
-        profileInfo = await prisma.admin.findUnique({
-            where: {
-                email: userInfo.email,
-            },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                profilePhoto: true,
-                contactNumber: true,
-                isDeleted: true,
-                createdAt: true,
-                updatedAt: true,
-            },
-        });
-    } else if (userInfo.role === UserRole.ADMIN) {
-        profileInfo = await prisma.admin.findUnique({
-            where: {
-                email: userInfo.email,
-            },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                profilePhoto: true,
-                contactNumber: true,
-                isDeleted: true,
-                createdAt: true,
-                updatedAt: true,
-            },
-        });
-    } else if (userInfo.role === UserRole.DOCTOR) {
-        profileInfo = await prisma.doctor.findUnique({
-            where: {
-                email: userInfo.email,
-            },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                profilePhoto: true,
-                contactNumber: true,
-                address: true,
-                registrationNumber: true,
-                experience: true,
-                gender: true,
-                appointmentFee: true,
-                qualification: true,
-                currentWorkingPlace: true,
-                designation: true,
-                averageRating: true,
-                isDeleted: true,
-                createdAt: true,
-                updatedAt: true,
-                doctorSpecialties: {
-                    include: {
-                        specialities: true,
-                    },
-                },
-            },
-        });
-    } else if (userInfo.role === UserRole.PATIENT) {
-        profileInfo = await prisma.patient.findUnique({
-            where: {
-                email: userInfo.email,
-            },
-            select: {
-                id: true,
-                name: true,
-                email: true,
-                profilePhoto: true,
-                contactNumber: true,
-                address: true,
-                isDeleted: true,
-                createdAt: true,
-                updatedAt: true,
-                patientHealthData: true,
-                medicalReport: {
-                    select: {
-                        id: true,
-                        patientId: true,
-                        reportName: true,
-                        reportLink: true,
-                        createdAt: true,
-                        updatedAt: true,
-                    },
-                },
-            },
-        });
-    }
-
-    return { ...userInfo, ...profileInfo };
+    return result;
 };
 
 const updateMyProfie = async (user: IAuthUser, req: Request) => {
@@ -407,39 +392,128 @@ const updateMyProfie = async (user: IAuthUser, req: Request) => {
         req.body.profilePhoto = uploadToCloudinary?.secure_url;
     }
 
-    let profileInfo;
+    const body = (req.body ?? {}) as Record<string, unknown>;
 
-    if (userInfo.role === UserRole.SUPER_ADMIN) {
-        profileInfo = await prisma.admin.update({
-            where: {
-                email: userInfo.email,
-            },
-            data: req.body,
+    // Never allow changing unique identifiers via "update my profile".
+    delete (body as any).id;
+    delete (body as any).email;
+    delete (body as any).createdAt;
+    delete (body as any).updatedAt;
+
+    if (
+        userInfo.role === UserRole.SUPER_ADMIN ||
+        userInfo.role === UserRole.ADMIN
+    ) {
+        const allowed = pickAllowed(body, [
+            "name",
+            "contactNumber",
+            "profilePhoto",
+        ]);
+
+        await prisma.admin.update({
+            where: { email: userInfo.email },
+            data: allowed,
         });
-    } else if (userInfo.role === UserRole.ADMIN) {
-        profileInfo = await prisma.admin.update({
-            where: {
-                email: userInfo.email,
-            },
-            data: req.body,
-        });
-    } else if (userInfo.role === UserRole.DOCTOR) {
-        profileInfo = await prisma.doctor.update({
-            where: {
-                email: userInfo.email,
-            },
-            data: req.body,
-        });
-    } else if (userInfo.role === UserRole.PATIENT) {
-        profileInfo = await prisma.patient.update({
-            where: {
-                email: userInfo.email,
-            },
-            data: req.body,
-        });
+
+        return getMyProfile(user);
     }
 
-    return { ...profileInfo };
+    if (userInfo.role === UserRole.DOCTOR) {
+        const allowed = pickAllowed(body, [
+            "name",
+            "contactNumber",
+            "address",
+            "registrationNumber",
+            "experience",
+            "gender",
+            "appointmentFee",
+            "qualification",
+            "currentWorkingPlace",
+            "designation",
+            "profilePhoto",
+        ]);
+
+        await prisma.doctor.update({
+            where: { email: userInfo.email },
+            data: allowed,
+        });
+
+        return getMyProfile(user);
+    }
+
+    if (userInfo.role === UserRole.PATIENT) {
+        const patientHealthDataRaw = (body as any).patientHealthData;
+        delete (body as any).patientHealthData;
+
+        const allowedPatient = pickAllowed(body, [
+            "name",
+            "contactNumber",
+            "address",
+            "profilePhoto",
+        ]);
+
+        // Upsert health data if provided
+        const shouldUpsertHealthData =
+            patientHealthDataRaw && typeof patientHealthDataRaw === "object";
+
+        if (shouldUpsertHealthData) {
+            const patient = await prisma.patient.findUnique({
+                where: { email: userInfo.email },
+                select: { id: true },
+            });
+
+            if (!patient?.id) {
+                throw new ApiError(
+                    httpStatus.NOT_FOUND,
+                    "Patient profile not found",
+                );
+            }
+
+            const allowedHealthData = pickAllowed(patientHealthDataRaw as any, [
+                "gender",
+                "dateOfBirth",
+                "bloodGroup",
+                "hasAllergies",
+                "hasDiabetes",
+                "height",
+                "weight",
+                "smokingStatus",
+                "dietaryPreferences",
+                "pregnancyStatus",
+                "mentalHealthHistory",
+                "immunizationStatus",
+                "hasPastSurgeries",
+                "recentAnxiety",
+                "recentDepression",
+                "maritalStatus",
+            ]);
+
+            await prisma.patient.update({
+                where: { email: userInfo.email },
+                data: {
+                    ...allowedPatient,
+                    patientHealthData: {
+                        upsert: {
+                            create: {
+                                ...allowedHealthData,
+                                patientId: patient.id,
+                            },
+                            update: allowedHealthData,
+                        },
+                    },
+                },
+            });
+        } else {
+            await prisma.patient.update({
+                where: { email: userInfo.email },
+                data: allowedPatient,
+            });
+        }
+
+        return getMyProfile(user);
+    }
+
+    throw new ApiError(httpStatus.FORBIDDEN, "You are not authorized");
 };
 
 export const userService = {

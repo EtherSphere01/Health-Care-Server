@@ -1,4 +1,5 @@
 import { UserStatus } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 import * as bcrypt from "bcryptjs";
 import httpStatus from "http-status";
 import { Secret } from "jsonwebtoken";
@@ -8,6 +9,14 @@ import prisma from "../../../shared/prisma";
 import ApiError from "../../errors/ApiError";
 import emailSender from "./emailSender";
 
+function isValidEmail(email: string) {
+    // Reasonable RFC-5322-ish check; the frontend also validates.
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function generateOtp() {
+    return String(Math.floor(100000 + Math.random() * 900000));
+}
 const loginUser = async (payload: { email: string; password: string }) => {
     const userData = await prisma.user.findUnique({
         where: {
@@ -17,7 +26,7 @@ const loginUser = async (payload: { email: string; password: string }) => {
     });
 
     if (!userData) {
-        throw new Error("Email not found!");
+        throw new ApiError(httpStatus.UNAUTHORIZED, "Invalid credentials");
     }
 
     const isCorrectPassword: boolean = await bcrypt.compare(
@@ -26,7 +35,7 @@ const loginUser = async (payload: { email: string; password: string }) => {
     );
 
     if (!isCorrectPassword) {
-        throw new Error("Password incorrect!");
+        throw new ApiError(httpStatus.UNAUTHORIZED, "Invalid credentials");
     }
     const accessToken = jwtHelpers.generateToken(
         {
@@ -61,7 +70,7 @@ const refreshToken = async (token: string) => {
             config.jwt.refresh_token_secret as Secret,
         );
     } catch (err) {
-        throw new Error("You are not authorized!");
+        throw new ApiError(httpStatus.UNAUTHORIZED, "You are not authorized!");
     }
 
     const userData = await prisma.user.findUniqueOrThrow({
@@ -151,9 +160,11 @@ const forgotPassword = async (payload: { email: string }) => {
         config.reset_pass_link +
         `?email=${encodeURIComponent(userData.email)}&token=${resetPassToken}`;
 
-    await emailSender(
-        userData.email,
-        `
+    const isTestMode = process.env.ENABLE_TEST_ENDPOINTS === "1";
+    if (!isTestMode) {
+        await emailSender(
+            userData.email,
+            `
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -169,19 +180,19 @@ const forgotPassword = async (payload: { email: string }) => {
                             <!-- Header -->
                             <tr>
                                 <td style="padding: 40px 40px 20px 40px; text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px 8px 0 0;">
-                                    <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;"> Health Care</h1>
+                                    <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;"> Nexus Health</h1>
                                 </td>
                             </tr>
                             <!-- Content -->
                             <tr>
-                                <td style="padding: 40px;">
-                                    <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 24px; font-weight: 600;">Reset Your Password</h2>
-                                    <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 24px;">
-                                        Hello,
-                                    </p>
-                                    <p style="margin: 0 0 30px 0; color: #666666; font-size: 16px; line-height: 24px;">
-                                        We received a request to reset your password for your Health Care account. Click the button below to create a new password:
-                                    </p>
+                                    <td style="padding: 40px;">
+                                        <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 24px; font-weight: 600;">Reset Your Password</h2>
+                                        <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 24px;">
+                                            Hello,
+                                        </p>
+                                        <p style="margin: 0 0 30px 0; color: #666666; font-size: 16px; line-height: 24px;">
+                                            We received a request to reset your password for your Nexus Health account. Click the button below to create a new password:
+                                        </p>
                                     <!-- Button -->
                                     <table role="presentation" style="margin: 0 auto;">
                                         <tr>
@@ -205,16 +216,16 @@ const forgotPassword = async (payload: { email: string }) => {
                                         <ul style="margin: 0 0 20px 0; padding-left: 20px; color: #999999; font-size: 14px; line-height: 20px;">
                                             <li>This link will expire in 15 minutes</li>
                                             <li>If you didn't request this password reset, please ignore this email</li>
-                                            <li>For security reasons, never share this link with anyone</li>
-                                        </ul>
-                                    </div>
-                                </td>
+                                <td style="padding: 30px 40px; background-color: #f8f9fa; border-radius: 0 0 8px 8px; text-align: center;">
+                                    <p style="margin: 0 0 10px 0; color: #999999; font-size: 14px;">
+                                        © ${new Date().getFullYear()} Nexus Health. All rights reserved.
+                                    </p>
                             </tr>
                             <!-- Footer -->
                             <tr>
                                 <td style="padding: 30px 40px; background-color: #f8f9fa; border-radius: 0 0 8px 8px; text-align: center;">
                                     <p style="margin: 0 0 10px 0; color: #999999; font-size: 14px;">
-                                        © ${new Date().getFullYear()} Health Care. All rights reserved.
+                                        © ${new Date().getFullYear()} Nexus Health. All rights reserved.
                                     </p>
                                     <p style="margin: 0; color: #999999; font-size: 12px;">
                                         This is an automated email. Please do not reply.
@@ -228,12 +239,18 @@ const forgotPassword = async (payload: { email: string }) => {
         </body>
         </html>
         `,
-    );
+        );
+
+        return;
+    }
+
+    // Test-mode: avoid SMTP dependency and return the token directly to the caller.
+    return { resetToken: resetPassToken, resetLink: resetPassLink };
 };
 
 const resetPassword = async (
     token: string | null,
-    payload: { email?: string; password: string },
+    payload: { email?: string; password?: string },
     user?: { email: string },
 ) => {
     let userEmail: string;
@@ -288,6 +305,10 @@ const resetPassword = async (
         );
     }
 
+    if (!payload.password) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Password is required");
+    }
+
     // hash password
     const password = await bcrypt.hash(
         payload.password,
@@ -306,6 +327,186 @@ const resetPassword = async (
     });
 };
 
+const requestPatientRegistrationOtp = async (payload: {
+    name: string;
+    email: string;
+    password: string;
+}) => {
+    const email = String(payload.email ?? "")
+        .trim()
+        .toLowerCase();
+    const name = String(payload.name ?? "").trim();
+    const password = String(payload.password ?? "");
+
+    if (!name) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Name is required");
+    }
+
+    if (!isValidEmail(email)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Invalid email address");
+    }
+
+    if (password.length < 6) {
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            "Password must be at least 6 characters",
+        );
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+        throw new ApiError(
+            httpStatus.CONFLICT,
+            "User with this email already exists",
+        );
+    }
+
+    const otp = generateOtp();
+    const otpHash = await bcrypt.hash(otp, Number(config.salt_round));
+    const passwordHash = await bcrypt.hash(password, Number(config.salt_round));
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await prisma.patientRegistrationOtp.upsert({
+        where: { email },
+        create: {
+            email,
+            otpHash,
+            payload: {
+                passwordHash,
+                patient: {
+                    name,
+                    email,
+                },
+                role: UserRole.PATIENT,
+            },
+            expiresAt,
+        },
+        update: {
+            otpHash,
+            payload: {
+                passwordHash,
+                patient: {
+                    name,
+                    email,
+                },
+                role: UserRole.PATIENT,
+            },
+            attempts: 0,
+            expiresAt,
+        },
+    });
+
+    const isTestMode = process.env.ENABLE_TEST_ENDPOINTS === "1";
+    if (!isTestMode) {
+        await emailSender(
+            email,
+            `
+            <div style="font-family: Arial, sans-serif; line-height: 1.5;">
+              <h2>Nexus Health - Verify your email</h2>
+              <p>Your OTP code is:</p>
+              <p style="font-size: 24px; font-weight: 700; letter-spacing: 2px;">${otp}</p>
+              <p>This code will expire in 10 minutes.</p>
+            </div>
+            `,
+            "Your OTP Code",
+        );
+        return { email };
+    }
+
+    // Test-mode: return OTP so automation doesn't depend on SMTP.
+    return { email, otp };
+};
+
+const verifyPatientRegistrationOtp = async (payload: {
+    email: string;
+    otp: string;
+}) => {
+    const email = String(payload.email ?? "")
+        .trim()
+        .toLowerCase();
+    const otp = String(payload.otp ?? "").trim();
+
+    if (!isValidEmail(email)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "Invalid email address");
+    }
+    if (!otp) {
+        throw new ApiError(httpStatus.BAD_REQUEST, "OTP is required");
+    }
+
+    const record = await prisma.patientRegistrationOtp.findUnique({
+        where: { email },
+    });
+    if (!record) {
+        throw new ApiError(
+            httpStatus.NOT_FOUND,
+            "No pending registration found for this email",
+        );
+    }
+
+    if (record.expiresAt.getTime() < Date.now()) {
+        await prisma.patientRegistrationOtp.delete({ where: { email } });
+        throw new ApiError(httpStatus.BAD_REQUEST, "OTP has expired");
+    }
+
+    if (record.attempts >= 5) {
+        throw new ApiError(
+            httpStatus.TOO_MANY_REQUESTS,
+            "Too many invalid attempts. Please request a new OTP",
+        );
+    }
+
+    const isMatch = await bcrypt.compare(otp, record.otpHash);
+    if (!isMatch) {
+        await prisma.patientRegistrationOtp.update({
+            where: { email },
+            data: { attempts: { increment: 1 } },
+        });
+        throw new ApiError(httpStatus.BAD_REQUEST, "Invalid OTP");
+    }
+
+    const passwordHash = (record.payload as any)?.passwordHash;
+    const patientPayload = (record.payload as any)?.patient;
+    const name = String(patientPayload?.name ?? "").trim();
+
+    if (!passwordHash || !name) {
+        throw new ApiError(
+            httpStatus.INTERNAL_SERVER_ERROR,
+            "Invalid pending registration payload",
+        );
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+        await prisma.patientRegistrationOtp.delete({ where: { email } });
+        throw new ApiError(
+            httpStatus.CONFLICT,
+            "User with this email already exists",
+        );
+    }
+
+    await prisma.$transaction(async (tx) => {
+        await tx.user.create({
+            data: {
+                email,
+                password: passwordHash,
+                role: UserRole.PATIENT,
+                needPasswordChange: false,
+            },
+        });
+
+        await tx.patient.create({
+            data: {
+                email,
+                name,
+            },
+        });
+
+        await tx.patientRegistrationOtp.delete({ where: { email } });
+    });
+
+    return { email };
+};
 const getMe = async (user: any) => {
     const accessToken = user.accessToken;
     const decodedData = jwtHelpers.verifyToken(
@@ -391,4 +592,6 @@ export const AuthServices = {
     forgotPassword,
     resetPassword,
     getMe,
+    requestPatientRegistrationOtp,
+    verifyPatientRegistrationOtp,
 };

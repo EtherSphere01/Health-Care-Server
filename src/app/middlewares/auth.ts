@@ -12,7 +12,14 @@ const auth = (...roles: string[]) => {
         next: NextFunction,
     ) => {
         try {
-            const token = req.headers.authorization || req.cookies.accessToken;
+            const authHeader = req.headers.authorization;
+            const rawHeaderToken =
+                typeof authHeader === "string" ? authHeader : undefined;
+            const tokenFromHeader = rawHeaderToken?.startsWith("Bearer ")
+                ? rawHeaderToken.slice("Bearer ".length)
+                : rawHeaderToken;
+
+            const token = tokenFromHeader || req.cookies.accessToken;
 
             if (!token) {
                 throw new ApiError(

@@ -42,7 +42,7 @@ cron.schedule("*/10 * * * *", () => {
 
 app.get("/", (req: Request, res: Response) => {
     res.send({
-        Message: "Health care server..",
+        Message: "Nexus Health server..",
     });
 });
 

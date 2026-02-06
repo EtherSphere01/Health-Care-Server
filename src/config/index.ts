@@ -1,7 +1,8 @@
 import dotenv from "dotenv";
 import path from "path";
 
-dotenv.config({ path: path.join(process.cwd(), ".env") });
+// Load .env from the project root (robust even if the process is started from a different cwd)
+dotenv.config({ path: path.join(__dirname, "..", "..", "..", ".env") });
 
 export default {
     env: process.env.NODE_ENV,
@@ -9,7 +10,10 @@ export default {
     stripeSecretKey: process.env.STRIPE_SECRET_KEY,
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
     salt_round: process.env.SALT_ROUND,
-    openRouterApiKey: process.env.OPENROUTER_API_KEY,
+    openRouterApiKey:
+        process.env.OPENROUTER_API_KEY ||
+        process.env.OPENROUTERAPIKEY ||
+        process.env.openrouterapikey,
     jwt: {
         jwt_secret: process.env.JWT_SECRET,
         expires_in: process.env.EXPIRES_IN,

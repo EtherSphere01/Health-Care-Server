@@ -67,7 +67,7 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}"
+                            "raw": "{\n  \"email\": \"admin@gmail.com\",\n  \"password\": \"123456\"\n}"
                         },
                         "url": {
                             "raw": "{{baseUrl}}/auth/login",
@@ -736,6 +736,48 @@
                             ]
                         },
                         "description": "Get AI-powered doctor specialty suggestions based on symptoms (Public)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Consultation AI Suggestion",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status is 200\", function () { pm.response.to.have.status(200); });",
+                                    "const jsonData = pm.response.json();",
+                                    "pm.test(\"Has expected fields\", function () {",
+                                    "  pm.expect(jsonData).to.have.property('success');",
+                                    "  pm.expect(jsonData).to.have.property('data');",
+                                    "  pm.expect(jsonData.data).to.have.property('suggestedSpecialties');",
+                                    "  pm.expect(jsonData.data).to.have.property('recommendations');",
+                                    "  pm.expect(jsonData.data).to.have.property('urgencyLevel');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"symptoms\": \"persistent headache and blurred vision\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/doctor/ai-suggestion",
+                            "host": ["{{baseUrl}}"],
+                            "path": ["doctor", "ai-suggestion"]
+                        },
+                        "description": "Get consultation AI triage suggestion (specialties + recommendations) based on symptoms (Public)"
                     },
                     "response": []
                 },
@@ -1545,16 +1587,12 @@
                         "method": "POST",
                         "header": [],
                         "url": {
-                            "raw": "{{baseUrl}}/payment/init-payment/:appointmentId",
+                            "raw": "{{baseUrl}}/appointment/:id/initiate-payment",
                             "host": ["{{baseUrl}}"],
-                            "path": [
-                                "payment",
-                                "init-payment",
-                                ":appointmentId"
-                            ],
+                            "path": ["appointment", ":id", "initiate-payment"],
                             "variable": [
                                 {
-                                    "key": "appointmentId",
+                                    "key": "id",
                                     "value": "appointment-uuid"
                                 }
                             ]
@@ -1569,13 +1607,13 @@
                         "method": "GET",
                         "header": [],
                         "url": {
-                            "raw": "{{baseUrl}}/payment/ipn?transactionId=txn-123&status=success",
+                            "raw": "{{baseUrl}}/payment/ipn?transactionId={{transactionId}}&status=success",
                             "host": ["{{baseUrl}}"],
                             "path": ["payment", "ipn"],
                             "query": [
                                 {
                                     "key": "transactionId",
-                                    "value": "txn-123"
+                                    "value": "{{transactionId}}"
                                 },
                                 {
                                     "key": "status",
@@ -1803,6 +1841,30 @@
                             "path": ["meta"]
                         },
                         "description": "Get dashboard metadata (counts, statistics) based on user role (All authenticated users)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get Patient Dashboard Summary",
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{accessToken}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/meta/patient-summary",
+                            "host": ["{{baseUrl}}"],
+                            "path": ["meta", "patient-summary"]
+                        },
+                        "description": "Get patient dashboard summary (next appointment, latest prescription, outstanding payments, profile completion)"
                     },
                     "response": []
                 }

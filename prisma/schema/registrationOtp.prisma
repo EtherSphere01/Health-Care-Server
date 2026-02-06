@@ -1,0 +1,12 @@
+model PatientRegistrationOtp {
+    id        String   @id @default(uuid())
+    email     String   @unique
+    otpHash   String
+    payload   Json
+    attempts  Int      @default(0)
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("patient_registration_otps")
+}

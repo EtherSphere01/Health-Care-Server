@@ -53,6 +53,67 @@ const handleStripeWebhookEvent = catchAsync(
     },
 );
 
+const validateIpnCallback = catchAsync(async (req: Request, res: Response) => {
+    const transactionId =
+        typeof req.query.transactionId === "string"
+            ? req.query.transactionId
+            : undefined;
+    const status = typeof req.query.status === "string" ? req.query.status : "";
+
+    if (!transactionId) {
+        return sendResponse(res, {
+            statusCode: 400,
+            success: false,
+            message: "transactionId is required",
+            data: null,
+        });
+    }
+
+    const result = await PaymentService.validateIpnCallback(
+        transactionId,
+        status,
+    );
+
+    sendResponse(res, {
+        statusCode: 200,
+        success: true,
+        message: "Payment validation processed",
+        data: result,
+    });
+});
+
+const validateStripeCheckoutSession = catchAsync(
+    async (req: Request & { user?: any }, res: Response) => {
+        const sessionId =
+            typeof req.query.session_id === "string"
+                ? req.query.session_id
+                : undefined;
+
+        if (!sessionId) {
+            return sendResponse(res, {
+                statusCode: 400,
+                success: false,
+                message: "session_id is required",
+                data: null,
+            });
+        }
+
+        const result = await PaymentService.validateStripeCheckoutSession(
+            sessionId,
+            req.user,
+        );
+
+        sendResponse(res, {
+            statusCode: 200,
+            success: true,
+            message: "Stripe session validated",
+            data: result,
+        });
+    },
+);
+
 export const PaymentController = {
     handleStripeWebhookEvent,
+    validateIpnCallback,
+    validateStripeCheckoutSession,
 };

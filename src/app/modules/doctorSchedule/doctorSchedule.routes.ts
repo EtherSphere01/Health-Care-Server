@@ -1,41 +1,47 @@
-import { UserRole } from '@prisma/client';
-import express from 'express';
-import auth from '../../middlewares/auth';
-import validateRequest from '../../middlewares/validateRequest';
-import { DoctorScheduleController } from './doctorSchedule.controller';
-import { DoctorScheduleValidation } from './doctorSchedule.validation';
+import { UserRole } from "@prisma/client";
+import express from "express";
+import auth from "../../middlewares/auth";
+import validateRequest from "../../middlewares/validateRequest";
+import { DoctorScheduleController } from "./doctorSchedule.controller";
+import { DoctorScheduleValidation } from "./doctorSchedule.validation";
 
 const router = express.Router();
 
 /**
  * API ENDPOINT: /doctor-schedule/
- * 
+ *
  * Get all doctor schedule with filtering
  */
+router.get("/public", DoctorScheduleController.getAllFromDB);
+
 router.get(
-    '/',
-    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT),
-    DoctorScheduleController.getAllFromDB
+    "/",
+    auth(
+        UserRole.SUPER_ADMIN,
+        UserRole.ADMIN,
+        UserRole.DOCTOR,
+        UserRole.PATIENT,
+    ),
+    DoctorScheduleController.getAllFromDB,
 );
 
 router.get(
-    '/my-schedule',
+    "/my-schedule",
     auth(UserRole.DOCTOR),
-    DoctorScheduleController.getMySchedule
-)
+    DoctorScheduleController.getMySchedule,
+);
 
 router.post(
-    '/',
+    "/",
     auth(UserRole.DOCTOR),
     validateRequest(DoctorScheduleValidation.create),
-    DoctorScheduleController.insertIntoDB
+    DoctorScheduleController.insertIntoDB,
 );
 
 router.delete(
-    '/:id',
+    "/:id",
     auth(UserRole.DOCTOR),
-    DoctorScheduleController.deleteFromDB
+    DoctorScheduleController.deleteFromDB,
 );
-
 
 export const DoctorScheduleRoutes = router;

@@ -7,366 +7,503 @@ import { doctorSearchableFields } from "./doctor.constants";
 import { IDoctorFilterRequest, IDoctorUpdate } from "./doctor.interface";
 
 const getAllFromDB = async (
-  filters: IDoctorFilterRequest,
-  options: IPaginationOptions
+    filters: IDoctorFilterRequest,
+    options: IPaginationOptions,
 ) => {
-  const { limit, page, skip } = paginationHelper.calculatePagination(options);
-  const { searchTerm, specialties, ...filterData } = filters;
+    const { limit, page, skip } = paginationHelper.calculatePagination(options);
+    const { searchTerm, specialties, ...filterData } = filters;
 
-  const andConditions: Prisma.DoctorWhereInput[] = [];
+    const andConditions: Prisma.DoctorWhereInput[] = [];
 
-  if (searchTerm) {
-    andConditions.push({
-      OR: doctorSearchableFields.map((field) => ({
-        [field]: {
-          contains: searchTerm,
-          mode: "insensitive",
-        },
-      })),
-    });
-  }
+    if (searchTerm) {
+        andConditions.push({
+            OR: doctorSearchableFields.map((field) => ({
+                [field]: {
+                    contains: searchTerm,
+                    mode: "insensitive",
+                },
+            })),
+        });
+    }
 
-  // doctor > doctorSpecialties > specialties -> title
-  // Handle multiple specialties: ?specialties=Cardiology&specialties=Neurology
-  if (specialties && specialties.length > 0) {
-    // Convert to array if single string
-    const specialtiesArray = Array.isArray(specialties) ? specialties : [specialties];
+    // doctor > doctorSpecialties > specialties -> title
+    // Handle multiple specialties: ?specialties=Cardiology&specialties=Neurology
+    if (specialties && specialties.length > 0) {
+        // Convert to array if single string
+        const specialtiesArray = Array.isArray(specialties)
+            ? specialties
+            : [specialties];
 
-    andConditions.push({
-      doctorSpecialties: {
-        some: {
-          specialities: {
-            title: {
-              in: specialtiesArray,
-              mode: "insensitive",
+        andConditions.push({
+            doctorSpecialties: {
+                some: {
+                    specialities: {
+                        title: {
+                            in: specialtiesArray,
+                            mode: "insensitive",
+                        },
+                    },
+                },
             },
-          },
-        },
-      },
+        });
+    }
+
+    if (Object.keys(filterData).length > 0) {
+        const filterConditions = Object.keys(filterData).map((key) => ({
+            [key]: {
+                equals: (filterData as any)[key],
+            },
+        }));
+        andConditions.push(...filterConditions);
+    }
+
+    andConditions.push({
+        isDeleted: false,
     });
-  }
 
-  if (Object.keys(filterData).length > 0) {
-    const filterConditions = Object.keys(filterData).map((key) => ({
-      [key]: {
-        equals: (filterData as any)[key],
-      },
-    }));
-    andConditions.push(...filterConditions);
-  }
+    const whereConditions: Prisma.DoctorWhereInput =
+        andConditions.length > 0 ? { AND: andConditions } : {};
 
-  andConditions.push({
-    isDeleted: false,
-  });
-
-  const whereConditions: Prisma.DoctorWhereInput =
-    andConditions.length > 0 ? { AND: andConditions } : {};
-
-  const result = await prisma.doctor.findMany({
-    where: whereConditions,
-    skip,
-    take: limit,
-    orderBy:
-      options.sortBy && options.sortOrder
-        ? { [options.sortBy]: options.sortOrder }
-        : { averageRating: "desc" },
-    include: {
-      doctorSpecialties: {
+    const result = await prisma.doctor.findMany({
+        where: whereConditions,
+        skip,
+        take: limit,
+        orderBy:
+            options.sortBy && options.sortOrder
+                ? { [options.sortBy]: options.sortOrder }
+                : { averageRating: "desc" },
         include: {
-          specialities: {
-            select: {
-              title: true,
-            }
-          },
+            doctorSpecialties: {
+                include: {
+                    specialities: {
+                        select: {
+                            title: true,
+                        },
+                    },
+                },
+            },
+            doctorSchedules: {
+                include: {
+                    schedule: true,
+                },
+            },
+            review: {
+                select: {
+                    rating: true,
+                },
+            },
         },
-      },
-      doctorSchedules: {
-        include: {
-          schedule: true
-        }
-      },
-      review: {
-        select: {
-          rating: true,
+    });
+
+    // console.log(result[0].doctorSpecialties);
+
+    const total = await prisma.doctor.count({
+        where: whereConditions,
+    });
+
+    return {
+        meta: {
+            total,
+            page,
+            limit,
         },
-      },
-    },
-  });
-
-  // console.log(result[0].doctorSpecialties);
-
-  const total = await prisma.doctor.count({
-    where: whereConditions,
-  });
-
-  return {
-    meta: {
-      total,
-      page,
-      limit,
-    },
-    data: result,
-  };
+        data: result,
+    };
 };
 
 const getByIdFromDB = async (id: string): Promise<Doctor | null> => {
-  const result = await prisma.doctor.findUnique({
-    where: {
-      id,
-      isDeleted: false,
-    },
-    include: {
-      doctorSpecialties: {
-        include: {
-          specialities: true,
+    const result = await prisma.doctor.findUnique({
+        where: {
+            id,
+            isDeleted: false,
         },
-      },
-      doctorSchedules: {
         include: {
-          schedule: true
-        }
-      },
-      review: true,
-    },
-  });
-  return result;
+            doctorSpecialties: {
+                include: {
+                    specialities: true,
+                },
+            },
+            doctorSchedules: {
+                include: {
+                    schedule: true,
+                },
+            },
+            review: true,
+        },
+    });
+    return result;
 };
 
 const updateIntoDB = async (id: string, payload: IDoctorUpdate) => {
-  const { specialties, removeSpecialties, ...doctorData } = payload;
+    const { specialties, removeSpecialties, ...doctorData } = payload;
 
-  const doctorInfo = await prisma.doctor.findUniqueOrThrow({
-    where: {
-      id,
-      isDeleted: false,
-    },
-  });
-
-  await prisma.$transaction(async (transactionClient) => {
-    // Step 1: Update doctor basic data
-    if (Object.keys(doctorData).length > 0) {
-      await transactionClient.doctor.update({
+    const doctorInfo = await prisma.doctor.findUniqueOrThrow({
         where: {
-          id,
+            id,
+            isDeleted: false,
         },
-        data: doctorData,
-      });
-    }
+    });
 
-    // Step 2: Remove specialties if provided
-    if (
-      removeSpecialties &&
-      Array.isArray(removeSpecialties) &&
-      removeSpecialties.length > 0
-    ) {
-      // Validate that specialties to remove exist for this doctor
-      const existingDoctorSpecialties =
-        await transactionClient.doctorSpecialties.findMany({
-          where: {
-            doctorId: doctorInfo.id,
-            specialitiesId: {
-              in: removeSpecialties,
-            },
-          },
-        });
+    await prisma.$transaction(async (transactionClient) => {
+        // Step 1: Update doctor basic data
+        if (Object.keys(doctorData).length > 0) {
+            await transactionClient.doctor.update({
+                where: {
+                    id,
+                },
+                data: doctorData,
+            });
+        }
 
-      if (existingDoctorSpecialties.length !== removeSpecialties.length) {
-        const foundIds = existingDoctorSpecialties.map(
-          (ds) => ds.specialitiesId
-        );
-        const notFound = removeSpecialties.filter(
-          (id) => !foundIds.includes(id)
-        );
-        throw new Error(
-          `Cannot remove non-existent specialties: ${notFound.join(", ")}`
-        );
-      }
+        // Step 2: Remove specialties if provided
+        if (
+            removeSpecialties &&
+            Array.isArray(removeSpecialties) &&
+            removeSpecialties.length > 0
+        ) {
+            // Validate that specialties to remove exist for this doctor
+            const existingDoctorSpecialties =
+                await transactionClient.doctorSpecialties.findMany({
+                    where: {
+                        doctorId: doctorInfo.id,
+                        specialitiesId: {
+                            in: removeSpecialties,
+                        },
+                    },
+                });
 
-      // Delete the specialties
-      await transactionClient.doctorSpecialties.deleteMany({
+            if (existingDoctorSpecialties.length !== removeSpecialties.length) {
+                const foundIds = existingDoctorSpecialties.map(
+                    (ds) => ds.specialitiesId,
+                );
+                const notFound = removeSpecialties.filter(
+                    (id) => !foundIds.includes(id),
+                );
+                throw new Error(
+                    `Cannot remove non-existent specialties: ${notFound.join(", ")}`,
+                );
+            }
+
+            // Delete the specialties
+            await transactionClient.doctorSpecialties.deleteMany({
+                where: {
+                    doctorId: doctorInfo.id,
+                    specialitiesId: {
+                        in: removeSpecialties,
+                    },
+                },
+            });
+        }
+
+        // Step 3: Add new specialties if provided
+        if (
+            specialties &&
+            Array.isArray(specialties) &&
+            specialties.length > 0
+        ) {
+            // Verify all specialties exist in Specialties table
+            const existingSpecialties =
+                await transactionClient.specialties.findMany({
+                    where: {
+                        id: {
+                            in: specialties,
+                        },
+                    },
+                    select: {
+                        id: true,
+                    },
+                });
+
+            const existingSpecialtyIds = existingSpecialties.map((s) => s.id);
+            const invalidSpecialties = specialties.filter(
+                (id) => !existingSpecialtyIds.includes(id),
+            );
+
+            if (invalidSpecialties.length > 0) {
+                throw new Error(
+                    `Invalid specialty IDs: ${invalidSpecialties.join(", ")}`,
+                );
+            }
+
+            // Check for duplicates - don't add specialties that already exist
+            const currentDoctorSpecialties =
+                await transactionClient.doctorSpecialties.findMany({
+                    where: {
+                        doctorId: doctorInfo.id,
+                        specialitiesId: {
+                            in: specialties,
+                        },
+                    },
+                    select: {
+                        specialitiesId: true,
+                    },
+                });
+
+            const currentSpecialtyIds = currentDoctorSpecialties.map(
+                (ds) => ds.specialitiesId,
+            );
+            const newSpecialties = specialties.filter(
+                (id) => !currentSpecialtyIds.includes(id),
+            );
+
+            // Only create new specialties that don't already exist
+            if (newSpecialties.length > 0) {
+                const doctorSpecialtiesData = newSpecialties.map(
+                    (specialtyId) => ({
+                        doctorId: doctorInfo.id,
+                        specialitiesId: specialtyId,
+                    }),
+                );
+
+                await transactionClient.doctorSpecialties.createMany({
+                    data: doctorSpecialtiesData,
+                });
+            }
+        }
+    });
+
+    // Step 4: Return updated doctor with specialties
+    const result = await prisma.doctor.findUnique({
         where: {
-          doctorId: doctorInfo.id,
-          specialitiesId: {
-            in: removeSpecialties,
-          },
+            id: doctorInfo.id,
         },
-      });
-    }
-
-    // Step 3: Add new specialties if provided
-    if (specialties && Array.isArray(specialties) && specialties.length > 0) {
-      // Verify all specialties exist in Specialties table
-      const existingSpecialties = await transactionClient.specialties.findMany({
-        where: {
-          id: {
-            in: specialties,
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      const existingSpecialtyIds = existingSpecialties.map((s) => s.id);
-      const invalidSpecialties = specialties.filter(
-        (id) => !existingSpecialtyIds.includes(id)
-      );
-
-      if (invalidSpecialties.length > 0) {
-        throw new Error(
-          `Invalid specialty IDs: ${invalidSpecialties.join(", ")}`
-        );
-      }
-
-      // Check for duplicates - don't add specialties that already exist
-      const currentDoctorSpecialties =
-        await transactionClient.doctorSpecialties.findMany({
-          where: {
-            doctorId: doctorInfo.id,
-            specialitiesId: {
-              in: specialties,
-            },
-          },
-          select: {
-            specialitiesId: true,
-          },
-        });
-
-      const currentSpecialtyIds = currentDoctorSpecialties.map(
-        (ds) => ds.specialitiesId
-      );
-      const newSpecialties = specialties.filter(
-        (id) => !currentSpecialtyIds.includes(id)
-      );
-
-      // Only create new specialties that don't already exist
-      if (newSpecialties.length > 0) {
-        const doctorSpecialtiesData = newSpecialties.map((specialtyId) => ({
-          doctorId: doctorInfo.id,
-          specialitiesId: specialtyId,
-        }));
-
-        await transactionClient.doctorSpecialties.createMany({
-          data: doctorSpecialtiesData,
-        });
-      }
-    }
-  });
-
-  // Step 4: Return updated doctor with specialties
-  const result = await prisma.doctor.findUnique({
-    where: {
-      id: doctorInfo.id,
-    },
-    include: {
-      doctorSpecialties: {
         include: {
-          specialities: true,
+            doctorSpecialties: {
+                include: {
+                    specialities: true,
+                },
+            },
         },
-      },
-    },
-  });
+    });
 
-  return result;
+    return result;
 };
 
 const deleteFromDB = async (id: string): Promise<Doctor> => {
-  return await prisma.$transaction(async (transactionClient) => {
-    const deleteDoctor = await transactionClient.doctor.delete({
-      where: {
-        id,
-      },
-    });
+    return await prisma.$transaction(async (transactionClient) => {
+        // Remove dependent rows first to avoid FK RESTRICT errors.
+        await transactionClient.doctorSpecialties.deleteMany({
+            where: { doctorId: id },
+        });
 
-    await transactionClient.user.delete({
-      where: {
-        email: deleteDoctor.email,
-      },
-    });
+        await transactionClient.doctorSchedules.deleteMany({
+            where: { doctorId: id },
+        });
 
-    return deleteDoctor;
-  });
+        await transactionClient.review.deleteMany({
+            where: { doctorId: id },
+        });
+
+        await transactionClient.prescription.deleteMany({
+            where: { doctorId: id },
+        });
+
+        const deleteDoctor = await transactionClient.doctor.delete({
+            where: {
+                id,
+            },
+        });
+
+        await transactionClient.user.delete({
+            where: {
+                email: deleteDoctor.email,
+            },
+        });
+
+        return deleteDoctor;
+    });
 };
 
 const softDelete = async (id: string): Promise<Doctor> => {
-  return await prisma.$transaction(async (transactionClient) => {
-    const deleteDoctor = await transactionClient.doctor.update({
-      where: { id },
-      data: {
-        isDeleted: true,
-      },
-    });
+    return await prisma.$transaction(async (transactionClient) => {
+        const deleteDoctor = await transactionClient.doctor.update({
+            where: { id },
+            data: {
+                isDeleted: true,
+            },
+        });
 
-    await transactionClient.user.update({
-      where: {
-        email: deleteDoctor.email,
-      },
-      data: {
-        status: UserStatus.DELETED,
-      },
-    });
+        await transactionClient.user.update({
+            where: {
+                email: deleteDoctor.email,
+            },
+            data: {
+                status: UserStatus.DELETED,
+            },
+        });
 
-    return deleteDoctor;
-  });
+        return deleteDoctor;
+    });
 };
 
 type PatientInput = {
-  symptoms: string;
+    symptoms: string;
+};
+
+type ConsultationAiSuggestion = {
+    suggestedSpecialties: string[];
+    recommendations: string;
+    urgencyLevel: "low" | "medium" | "high";
+};
+
+const getConsultationAISuggestion = async (
+    input: PatientInput,
+): Promise<ConsultationAiSuggestion> => {
+    const symptoms = input.symptoms?.trim?.() ?? "";
+
+    // Minimal fallback if OpenRouter isn't configured or parsing fails.
+    const fallback = (urgencyLevel: ConsultationAiSuggestion["urgencyLevel"]) =>
+        ({
+            suggestedSpecialties: ["General Medicine"],
+            recommendations:
+                "If symptoms are severe, worsening, or include chest pain, shortness of breath, fainting, or uncontrolled bleeding, seek urgent care immediately. Otherwise, consult a General Medicine doctor for evaluation.",
+            urgencyLevel,
+        }) satisfies ConsultationAiSuggestion;
+
+    // Heuristic urgency scoring (kept simple).
+    const lower = symptoms.toLowerCase();
+    const highUrgencyKeywords = [
+        "chest pain",
+        "shortness of breath",
+        "difficulty breathing",
+        "stroke",
+        "weakness",
+        "slurred",
+        "seizure",
+        "unconscious",
+        "severe bleeding",
+        "blood in vomit",
+        "black stool",
+    ];
+    const mediumUrgencyKeywords = [
+        "fever",
+        "persistent",
+        "worsening",
+        "vomiting",
+        "dehydration",
+        "infection",
+    ];
+
+    const urgencyLevel: ConsultationAiSuggestion["urgencyLevel"] =
+        highUrgencyKeywords.some((k) => lower.includes(k))
+            ? "high"
+            : mediumUrgencyKeywords.some((k) => lower.includes(k))
+              ? "medium"
+              : "low";
+
+    try {
+        const systemMessage = {
+            role: "system",
+            content:
+                "You are a medical triage assistant. Given symptoms, return specialty guidance only. Output MUST be strict JSON with keys: suggestedSpecialties (string array), recommendations (string), urgencyLevel (low|medium|high).",
+        };
+
+        const userMessage = {
+            role: "user",
+            content: `Symptoms: ${symptoms}\n\nReturn JSON only.`,
+        };
+
+        const response = await askOpenRouter([systemMessage, userMessage]);
+
+        const cleanedJson = response
+            .replace(/```(?:json)?\s*/g, "")
+            .replace(/```$/g, "")
+            .trim();
+
+        const parsed = JSON.parse(
+            cleanedJson,
+        ) as Partial<ConsultationAiSuggestion>;
+
+        const suggestedSpecialties = Array.isArray(parsed.suggestedSpecialties)
+            ? parsed.suggestedSpecialties.filter(
+                  (s): s is string => typeof s === "string",
+              )
+            : [];
+
+        const recommendations =
+            typeof parsed.recommendations === "string" &&
+            parsed.recommendations.trim()
+                ? parsed.recommendations.trim()
+                : fallback(urgencyLevel).recommendations;
+
+        const parsedUrgency =
+            parsed.urgencyLevel === "low" ||
+            parsed.urgencyLevel === "medium" ||
+            parsed.urgencyLevel === "high"
+                ? parsed.urgencyLevel
+                : urgencyLevel;
+
+        return {
+            suggestedSpecialties:
+                suggestedSpecialties.length > 0
+                    ? suggestedSpecialties
+                    : fallback(parsedUrgency).suggestedSpecialties,
+            recommendations,
+            urgencyLevel: parsedUrgency,
+        };
+    } catch (error) {
+        console.error("Consultation AI suggestion failed:", error);
+        return fallback(urgencyLevel);
+    }
 };
 
 const getAISuggestion = async (input: PatientInput) => {
-  // Fetch all active doctors with their specialties and ratings
-  const doctors = await prisma.doctor.findMany({
-    where: { isDeleted: false },
-    include: {
-      doctorSpecialties: {
-        include: { specialities: true },
-      },
-      review: { select: { rating: true } },
-    },
-  });
+    // Fetch all active doctors with their specialties and ratings
+    const doctors = await prisma.doctor.findMany({
+        where: { isDeleted: false },
+        include: {
+            doctorSpecialties: {
+                include: { specialities: true },
+            },
+            review: { select: { rating: true } },
+        },
+    });
 
-  if (doctors.length === 0) {
-    return [];
-  }
+    if (doctors.length === 0) {
+        return [];
+    }
 
-  // Transform doctors data to include calculated average ratings and all specialties
-  const doctorsWithRatings = doctors.map((doctor: any) => {
-    const allSpecialties = doctor.doctorSpecialties
-      .map((ds: any) => ds.specialities?.title)
-      .filter(Boolean);
+    // Transform doctors data to include calculated average ratings and all specialties
+    const doctorsWithRatings = doctors.map((doctor: any) => {
+        const allSpecialties = doctor.doctorSpecialties
+            .map((ds: any) => ds.specialities?.title)
+            .filter(Boolean);
 
-    return {
-      id: doctor.id,
-      name: doctor.name,
-      email: doctor.email,
-      profilePhoto: doctor.profilePhoto,
-      contactNumber: doctor.contactNumber,
-      address: doctor.address,
-      registrationNumber: doctor.registrationNumber,
-      experience: doctor.experience,
-      gender: doctor.gender,
-      appointmentFee: doctor.appointmentFee,
-      qualification: doctor.qualification,
-      currentWorkingPlace: doctor.currentWorkingPlace,
-      designation: doctor.designation,
-      averageRating: doctor.review && doctor.review.length > 0
-        ? doctor.review.reduce((sum: number, r: any) => sum + r.rating, 0) / doctor.review.length
-        : 0,
-      specialties: allSpecialties, // Array of all specialties
-      primarySpecialty: allSpecialties[0] || 'General', // For backward compatibility
+        return {
+            id: doctor.id,
+            name: doctor.name,
+            email: doctor.email,
+            profilePhoto: doctor.profilePhoto,
+            contactNumber: doctor.contactNumber,
+            address: doctor.address,
+            registrationNumber: doctor.registrationNumber,
+            experience: doctor.experience,
+            gender: doctor.gender,
+            appointmentFee: doctor.appointmentFee,
+            qualification: doctor.qualification,
+            currentWorkingPlace: doctor.currentWorkingPlace,
+            designation: doctor.designation,
+            averageRating:
+                doctor.review && doctor.review.length > 0
+                    ? doctor.review.reduce(
+                          (sum: number, r: any) => sum + r.rating,
+                          0,
+                      ) / doctor.review.length
+                    : 0,
+            specialties: allSpecialties, // Array of all specialties
+            primarySpecialty: allSpecialties[0] || "General", // For backward compatibility
+        };
+    });
+
+    const systemMessage = {
+        role: "system",
+        content:
+            "You are an expert medical recommendation assistant. Analyze patient symptoms and match them to the most appropriate medical specialty, then recommend suitable doctors. Be very precise in specialty matching - for example: headaches/brain issues → Neurology, chest pain/heart issues → Cardiology, kidney issues → Nephrology, etc.",
     };
-  });
 
-  const systemMessage = {
-    role: "system",
-    content:
-      "You are an expert medical recommendation assistant. Analyze patient symptoms and match them to the most appropriate medical specialty, then recommend suitable doctors. Be very precise in specialty matching - for example: headaches/brain issues → Neurology, chest pain/heart issues → Cardiology, kidney issues → Nephrology, etc.",
-  };
-
-  const userMessage = {
-    role: "user",
-    content: `
+    const userMessage = {
+        role: "user",
+        content: `
 Patient Symptoms: ${input.symptoms}
 
 Available Doctors (JSON):
@@ -416,168 +553,171 @@ Example format:
 
 RESPOND WITH ONLY THE JSON ARRAY - NO EXPLANATIONS, NO MARKDOWN, NO EXTRA TEXT.
 `,
-  };
+    };
 
-  try {
-    const response = await askOpenRouter([systemMessage, userMessage]);
+    try {
+        const response = await askOpenRouter([systemMessage, userMessage]);
 
-    // Clean the response to extract JSON
-    const cleanedJson = response
-      .replace(/```(?:json)?\s*/g, "") // remove ``` or ```json
-      .replace(/```$/g, "") // remove ending ```
-      .trim();
+        // Clean the response to extract JSON
+        const cleanedJson = response
+            .replace(/```(?:json)?\s*/g, "") // remove ``` or ```json
+            .replace(/```$/g, "") // remove ending ```
+            .trim();
 
-    const suggestedDoctors = JSON.parse(cleanedJson);
+        const suggestedDoctors = JSON.parse(cleanedJson);
 
-    // Validate that response is an array
-    if (!Array.isArray(suggestedDoctors)) {
-      console.error('AI response is not an array:', suggestedDoctors);
-      return [];
+        // Validate that response is an array
+        if (!Array.isArray(suggestedDoctors)) {
+            console.error("AI response is not an array:", suggestedDoctors);
+            return [];
+        }
+
+        return suggestedDoctors;
+    } catch (error) {
+        console.error("Error parsing AI suggestion response:", error);
+        // Fallback: return top-rated doctors with proper format
+        return doctorsWithRatings
+            .sort((a: any, b: any) => b.averageRating - a.averageRating)
+            .slice(0, 5)
+            .map((doctor: any) => ({
+                id: doctor.id,
+                name: doctor.name,
+                specialty: doctor.primarySpecialty,
+                experience: doctor.experience,
+                averageRating: doctor.averageRating,
+                appointmentFee: doctor.appointmentFee,
+                qualification: doctor.qualification,
+                designation: doctor.designation,
+                currentWorkingPlace: doctor.currentWorkingPlace,
+                profilePhoto: doctor.profilePhoto,
+            }));
     }
-
-    return suggestedDoctors;
-  } catch (error) {
-    console.error('Error parsing AI suggestion response:', error);
-    // Fallback: return top-rated doctors with proper format
-    return doctorsWithRatings
-      .sort((a: any, b: any) => b.averageRating - a.averageRating)
-      .slice(0, 5)
-      .map((doctor: any) => ({
-        id: doctor.id,
-        name: doctor.name,
-        specialty: doctor.primarySpecialty,
-        experience: doctor.experience,
-        averageRating: doctor.averageRating,
-        appointmentFee: doctor.appointmentFee,
-        qualification: doctor.qualification,
-        designation: doctor.designation,
-        currentWorkingPlace: doctor.currentWorkingPlace,
-        profilePhoto: doctor.profilePhoto,
-      }));
-  }
 };
 
 const getAllPublic = async (
-  filters: IDoctorFilterRequest,
-  options: IPaginationOptions
+    filters: IDoctorFilterRequest,
+    options: IPaginationOptions,
 ) => {
-  const { limit, page, skip } = paginationHelper.calculatePagination(options);
-  const { searchTerm, specialties, ...filterData } = filters;
+    const { limit, page, skip } = paginationHelper.calculatePagination(options);
+    const { searchTerm, specialties, ...filterData } = filters;
 
-  const andConditions: Prisma.DoctorWhereInput[] = [];
+    const andConditions: Prisma.DoctorWhereInput[] = [];
 
-  if (searchTerm) {
-    andConditions.push({
-      OR: doctorSearchableFields.map((field) => ({
-        [field]: {
-          contains: searchTerm,
-          mode: "insensitive",
-        },
-      })),
-    });
-  }
+    if (searchTerm) {
+        andConditions.push({
+            OR: doctorSearchableFields.map((field) => ({
+                [field]: {
+                    contains: searchTerm,
+                    mode: "insensitive",
+                },
+            })),
+        });
+    }
 
-  // Handle multiple specialties: ?specialties=Cardiology&specialties=Neurology
-  if (specialties && specialties.length > 0) {
-    // Convert to array if single string
-    const specialtiesArray = Array.isArray(specialties) ? specialties : [specialties];
+    // Handle multiple specialties: ?specialties=Cardiology&specialties=Neurology
+    if (specialties && specialties.length > 0) {
+        // Convert to array if single string
+        const specialtiesArray = Array.isArray(specialties)
+            ? specialties
+            : [specialties];
 
-    andConditions.push({
-      doctorSpecialties: {
-        some: {
-          specialities: {
-            title: {
-              in: specialtiesArray,
-              mode: "insensitive",
+        andConditions.push({
+            doctorSpecialties: {
+                some: {
+                    specialities: {
+                        title: {
+                            in: specialtiesArray,
+                            mode: "insensitive",
+                        },
+                    },
+                },
             },
-          },
-        },
-      },
+        });
+    }
+
+    if (Object.keys(filterData).length > 0) {
+        const filterConditions = Object.keys(filterData).map((key) => ({
+            [key]: {
+                equals: (filterData as any)[key],
+            },
+        }));
+        andConditions.push(...filterConditions);
+    }
+
+    andConditions.push({
+        isDeleted: false,
     });
-  }
 
-  if (Object.keys(filterData).length > 0) {
-    const filterConditions = Object.keys(filterData).map((key) => ({
-      [key]: {
-        equals: (filterData as any)[key],
-      },
-    }));
-    andConditions.push(...filterConditions);
-  }
+    const whereConditions: Prisma.DoctorWhereInput =
+        andConditions.length > 0 ? { AND: andConditions } : {};
 
-  andConditions.push({
-    isDeleted: false,
-  });
-
-  const whereConditions: Prisma.DoctorWhereInput =
-    andConditions.length > 0 ? { AND: andConditions } : {};
-
-  const result = await prisma.doctor.findMany({
-    where: whereConditions,
-    skip,
-    take: limit,
-    orderBy:
-      options.sortBy && options.sortOrder
-        ? { [options.sortBy]: options.sortOrder }
-        : { averageRating: "desc" },
-    select: {
-      id: true,
-      name: true,
-      // email: false, // Hide email in public API
-      profilePhoto: true,
-      contactNumber: true,
-      address: true,
-      registrationNumber: true,
-      experience: true,
-      gender: true,
-      appointmentFee: true,
-      qualification: true,
-      currentWorkingPlace: true,
-      designation: true,
-      averageRating: true,
-      createdAt: true,
-      updatedAt: true,
-      doctorSpecialties: {
-        include: {
-          specialities: true,
-        },
-      },
-      review: {
+    const result = await prisma.doctor.findMany({
+        where: whereConditions,
+        skip,
+        take: limit,
+        orderBy:
+            options.sortBy && options.sortOrder
+                ? { [options.sortBy]: options.sortOrder }
+                : { averageRating: "desc" },
         select: {
-          rating: true,
-          comment: true,
-          createdAt: true,
-          patient: {
-            select: {
-              name: true,
-              profilePhoto: true,
+            id: true,
+            name: true,
+            // email: false, // Hide email in public API
+            profilePhoto: true,
+            contactNumber: true,
+            address: true,
+            registrationNumber: true,
+            experience: true,
+            gender: true,
+            appointmentFee: true,
+            qualification: true,
+            currentWorkingPlace: true,
+            designation: true,
+            averageRating: true,
+            createdAt: true,
+            updatedAt: true,
+            doctorSpecialties: {
+                include: {
+                    specialities: true,
+                },
             },
-          },
+            review: {
+                select: {
+                    rating: true,
+                    comment: true,
+                    createdAt: true,
+                    patient: {
+                        select: {
+                            name: true,
+                            profilePhoto: true,
+                        },
+                    },
+                },
+            },
         },
-      },
-    },
-  });
+    });
 
-  const total = await prisma.doctor.count({
-    where: whereConditions,
-  });
+    const total = await prisma.doctor.count({
+        where: whereConditions,
+    });
 
-  return {
-    meta: {
-      total,
-      page,
-      limit,
-    },
-    data: result,
-  };
+    return {
+        meta: {
+            total,
+            page,
+            limit,
+        },
+        data: result,
+    };
 };
 
 export const DoctorService = {
-  updateIntoDB,
-  getAllFromDB,
-  getByIdFromDB,
-  deleteFromDB,
-  softDelete,
-  getAISuggestion,
-  getAllPublic,
+    updateIntoDB,
+    getAllFromDB,
+    getByIdFromDB,
+    deleteFromDB,
+    softDelete,
+    getAISuggestion,
+    getConsultationAISuggestion,
+    getAllPublic,
 };

@@ -16,7 +16,13 @@ import { MetaRoutes } from "../modules/meta/meta.routes";
 
 const router = express.Router();
 
-router.use(apiLimiter); // Apply to all routes
+const disableRateLimit =
+    process.env.DISABLE_RATE_LIMIT === "1" ||
+    process.env.ENABLE_TEST_ENDPOINTS === "1";
+
+if (!disableRateLimit) {
+    router.use(apiLimiter); // Apply to all routes
+}
 
 const moduleRoutes = [
     {
