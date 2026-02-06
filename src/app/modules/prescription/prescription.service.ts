@@ -1,4 +1,10 @@
-import { AppointmentStatus, Prescription, Prisma } from "@prisma/client";
+import {
+    AppointmentStatus,
+    NotificationType,
+    Prescription,
+    Prisma,
+    UserRole,
+} from "@prisma/client";
 import httpStatus from "http-status";
 import { paginationHelper } from "../../../helpers/paginationHelper";
 import prisma from "../../../shared/prisma";
@@ -6,21 +12,57 @@ import ApiError from "../../errors/ApiError";
 import { IAuthUser } from "../../interfaces/common";
 import { IPaginationOptions } from "../../interfaces/pagination";
 
-const insertIntoDB = async (user: IAuthUser, payload: Partial<Prescription>) => {
-    const appointmentData = await prisma.appointment.findUniqueOrThrow({
+const insertIntoDB = async (
+    user: IAuthUser,
+    payload: Partial<Prescription>,
+) => {
+    if (!payload.appointmentId) {
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            "Appointment ID is required",
+        );
+    }
+
+    const existingPrescription = await prisma.prescription.findUnique({
+        where: {
+            appointmentId: payload.appointmentId,
+        },
+        select: { id: true },
+    });
+
+    if (existingPrescription?.id) {
+        throw new ApiError(
+            httpStatus.CONFLICT,
+            "Prescription already exists for this appointment",
+        );
+    }
+
+    const appointmentData = await prisma.appointment.findFirst({
         where: {
             id: payload.appointmentId,
-            status: AppointmentStatus.COMPLETED,
+            status: {
+                in: [AppointmentStatus.INPROGRESS, AppointmentStatus.COMPLETED],
+            },
             // paymentStatus: PaymentStatus.PAID
         },
         include: {
-            doctor: true
-        }
+            doctor: true,
+        },
     });
 
+    if (!appointmentData) {
+        throw new ApiError(
+            httpStatus.NOT_FOUND,
+            "Appointment not found or not eligible for prescription",
+        );
+    }
+
     if (!(user?.email === appointmentData.doctor.email)) {
-        throw new ApiError(httpStatus.BAD_REQUEST, "This is not your appointment!")
-    };
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            "This is not your appointment!",
+        );
+    }
 
     const result = await prisma.prescription.create({
         data: {
@@ -28,60 +70,82 @@ const insertIntoDB = async (user: IAuthUser, payload: Partial<Prescription>) => 
             doctorId: appointmentData.doctorId,
             patientId: appointmentData.patientId,
             instructions: payload.instructions as string,
-            followUpDate: payload.followUpDate || null || undefined
+            followUpDate: payload.followUpDate || null || undefined,
         },
         include: {
-            patient: true
-        }
+            patient: true,
+        },
     });
 
+    await prisma.notification.createMany({
+        data: [
+            {
+                recipientEmail: result.patient.email,
+                recipientRole: UserRole.PATIENT,
+                type: NotificationType.PRESCRIPTION_CREATED,
+                title: "Prescription created",
+                message:
+                    "A new prescription has been added for your appointment.",
+                link: "/dashboard/my-prescriptions",
+            },
+            {
+                recipientEmail: appointmentData.doctor.email,
+                recipientRole: UserRole.DOCTOR,
+                type: NotificationType.PRESCRIPTION_CREATED,
+                title: "Prescription created",
+                message: `You created a prescription for ${result.patient.name}.`,
+                link: "/doctor/dashboard/prescriptions",
+            },
+        ],
+    });
 
     return result;
 };
 
-const patientPrescription = async (user: IAuthUser, options: IPaginationOptions) => {
+const patientPrescription = async (
+    user: IAuthUser,
+    options: IPaginationOptions,
+) => {
     const { limit, page, skip } = paginationHelper.calculatePagination(options);
 
     const result = await prisma.prescription.findMany({
         where: {
             patient: {
-                email: user?.email
-            }
+                email: user?.email,
+            },
         },
         skip,
         take: limit,
-        orderBy: options.sortBy && options.sortOrder
-            ? { [options.sortBy]: options.sortOrder }
-            : { createdAt: 'desc' },
+        orderBy:
+            options.sortBy && options.sortOrder
+                ? { [options.sortBy]: options.sortOrder }
+                : { createdAt: "desc" },
         include: {
             doctor: true,
             patient: true,
-            appointment: true
-        }
+            appointment: true,
+        },
     });
 
     const total = await prisma.prescription.count({
         where: {
             patient: {
-                email: user?.email
-            }
-        }
-    })
+                email: user?.email,
+            },
+        },
+    });
 
     return {
         meta: {
             total,
             page,
-            limit
+            limit,
         },
-        data: result
+        data: result,
     };
 };
 
-const getAllFromDB = async (
-    filters: any,
-    options: IPaginationOptions,
-) => {
+const getAllFromDB = async (filters: any, options: IPaginationOptions) => {
     const { limit, page, skip } = paginationHelper.calculatePagination(options);
     const { patientEmail, doctorEmail } = filters;
     const andConditions = [];
@@ -89,17 +153,17 @@ const getAllFromDB = async (
     if (patientEmail) {
         andConditions.push({
             patient: {
-                email: patientEmail
-            }
-        })
+                email: patientEmail,
+            },
+        });
     }
 
     if (doctorEmail) {
         andConditions.push({
             doctor: {
-                email: doctorEmail
-            }
-        })
+                email: doctorEmail,
+            },
+        });
     }
 
     const whereConditions: Prisma.PrescriptionWhereInput =
@@ -113,8 +177,8 @@ const getAllFromDB = async (
             options.sortBy && options.sortOrder
                 ? { [options.sortBy]: options.sortOrder }
                 : {
-                    createdAt: 'desc',
-                },
+                      createdAt: "desc",
+                  },
         include: {
             doctor: true,
             patient: true,
@@ -135,9 +199,8 @@ const getAllFromDB = async (
     };
 };
 
-
 export const PrescriptionService = {
     insertIntoDB,
     patientPrescription,
-    getAllFromDB
-}
+    getAllFromDB,
+};

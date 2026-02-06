@@ -109,6 +109,9 @@ const getMySchedule = async (
             options.sortBy && options.sortOrder
                 ? { [options.sortBy]: options.sortOrder }
                 : {},
+        include: {
+            schedule: true,
+        },
     });
     const total = await prisma.doctorSchedules.count({
         where: whereConditions,

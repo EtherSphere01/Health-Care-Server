@@ -1,4 +1,4 @@
-import { PaymentStatus } from "@prisma/client";
+import { NotificationType, PaymentStatus, UserRole } from "@prisma/client";
 import httpStatus from "http-status";
 import Stripe from "stripe";
 import prisma from "../../../shared/prisma";
@@ -33,6 +33,7 @@ const handleStripeWebhookEvent = async (event: Stripe.Event) => {
             // Verify appointment exists
             const appointment = await prisma.appointment.findUnique({
                 where: { id: appointmentId },
+                include: { patient: true, doctor: true },
             });
 
             if (!appointment) {
@@ -69,6 +70,29 @@ const handleStripeWebhookEvent = async (event: Stripe.Event) => {
                         stripeEventId: event.id, // Store event ID for idempotency
                     },
                 });
+
+                if (session.payment_status === "paid") {
+                    await tx.notification.createMany({
+                        data: [
+                            {
+                                recipientEmail: appointment.patient.email,
+                                recipientRole: UserRole.PATIENT,
+                                type: NotificationType.PAYMENT_UPDATED,
+                                title: "Payment successful",
+                                message: `Your payment for the appointment is successful.`,
+                                link: "/dashboard/my-appointments",
+                            },
+                            {
+                                recipientEmail: appointment.doctor.email,
+                                recipientRole: UserRole.DOCTOR,
+                                type: NotificationType.PAYMENT_UPDATED,
+                                title: "Payment received",
+                                message: `Payment received for an appointment with ${appointment.patient.name}.`,
+                                link: "/doctor/dashboard/appointments",
+                            },
+                        ],
+                    });
+                }
             });
 
             console.log(
@@ -102,7 +126,9 @@ export const PaymentService = {
     validateIpnCallback: async (transactionId: string, status: string) => {
         const payment = await prisma.payment.findUnique({
             where: { transactionId },
-            include: { appointment: true },
+            include: {
+                appointment: { include: { patient: true, doctor: true } },
+            },
         });
 
         if (!payment) {
@@ -137,6 +163,29 @@ export const PaymentService = {
                         : PaymentStatus.UNPAID,
                 },
             });
+
+            if (isSuccess) {
+                await tx.notification.createMany({
+                    data: [
+                        {
+                            recipientEmail: payment.appointment.patient.email,
+                            recipientRole: UserRole.PATIENT,
+                            type: NotificationType.PAYMENT_UPDATED,
+                            title: "Payment successful",
+                            message: `Your payment for the appointment is successful.`,
+                            link: "/dashboard/my-appointments",
+                        },
+                        {
+                            recipientEmail: payment.appointment.doctor.email,
+                            recipientRole: UserRole.DOCTOR,
+                            type: NotificationType.PAYMENT_UPDATED,
+                            title: "Payment received",
+                            message: `Payment received for an appointment with ${payment.appointment.patient.name}.`,
+                            link: "/doctor/dashboard/appointments",
+                        },
+                    ],
+                });
+            }
         });
 
         return {
@@ -160,7 +209,7 @@ export const PaymentService = {
 
         const appointment = await prisma.appointment.findUnique({
             where: { id: appointmentId },
-            include: { patient: true, payment: true },
+            include: { patient: true, doctor: true, payment: true },
         });
 
         if (!appointment) {
@@ -194,6 +243,29 @@ export const PaymentService = {
                 where: { id: appointmentId },
                 data: { paymentStatus: nextStatus },
             });
+
+            if (paid) {
+                await tx.notification.createMany({
+                    data: [
+                        {
+                            recipientEmail: appointment.patient.email,
+                            recipientRole: UserRole.PATIENT,
+                            type: NotificationType.PAYMENT_UPDATED,
+                            title: "Payment successful",
+                            message: `Your payment for the appointment is successful.`,
+                            link: "/dashboard/my-appointments",
+                        },
+                        {
+                            recipientEmail: appointment.doctor.email,
+                            recipientRole: UserRole.DOCTOR,
+                            type: NotificationType.PAYMENT_UPDATED,
+                            title: "Payment received",
+                            message: `Payment received for an appointment with ${appointment.patient.name}.`,
+                            link: "/doctor/dashboard/appointments",
+                        },
+                    ],
+                });
+            }
         });
 
         return {

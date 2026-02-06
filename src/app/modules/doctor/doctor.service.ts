@@ -342,6 +342,7 @@ type PatientInput = {
 
 type ConsultationAiSuggestion = {
     suggestedSpecialties: string[];
+    suggestedDoctors: string[];
     recommendations: string;
     urgencyLevel: "low" | "medium" | "high";
 };
@@ -351,10 +352,74 @@ const getConsultationAISuggestion = async (
 ): Promise<ConsultationAiSuggestion> => {
     const symptoms = input.symptoms?.trim?.() ?? "";
 
+    const pickSuggestedDoctors = async (specialtyTitles: string[]) => {
+        const titles = (specialtyTitles ?? []).filter(
+            (t): t is string => typeof t === "string" && t.trim().length > 0,
+        );
+        if (titles.length === 0) return [];
+
+        const doctors = await prisma.doctor.findMany({
+            where: {
+                isDeleted: false,
+                doctorSpecialties: {
+                    some: {
+                        specialities: {
+                            title: {
+                                in: titles,
+                                mode: "insensitive",
+                            },
+                        },
+                    },
+                },
+            },
+            include: {
+                doctorSpecialties: {
+                    include: {
+                        specialities: {
+                            select: {
+                                title: true,
+                            },
+                        },
+                    },
+                },
+                review: {
+                    select: {
+                        rating: true,
+                    },
+                },
+            },
+        });
+
+        const scored = doctors
+            .map((d: any) => {
+                const avgRating =
+                    d.review && d.review.length > 0
+                        ? d.review.reduce(
+                              (sum: number, r: any) => sum + r.rating,
+                              0,
+                          ) / d.review.length
+                        : 0;
+
+                const experience = Number(d.experience ?? 0) || 0;
+                return { doctor: d, avgRating, experience };
+            })
+            .sort((a, b) => {
+                if (b.avgRating !== a.avgRating)
+                    return b.avgRating - a.avgRating;
+                return b.experience - a.experience;
+            });
+
+        return scored
+            .slice(0, 6)
+            .map((x) => `Dr. ${x.doctor.name}`)
+            .filter(Boolean);
+    };
+
     // Minimal fallback if OpenRouter isn't configured or parsing fails.
     const fallback = (urgencyLevel: ConsultationAiSuggestion["urgencyLevel"]) =>
         ({
             suggestedSpecialties: ["General Medicine"],
+            suggestedDoctors: [],
             recommendations:
                 "If symptoms are severe, worsening, or include chest pain, shortness of breath, fainting, or uncontrolled bleeding, seek urgent care immediately. Otherwise, consult a General Medicine doctor for evaluation.",
             urgencyLevel,
@@ -438,12 +503,27 @@ const getConsultationAISuggestion = async (
                 suggestedSpecialties.length > 0
                     ? suggestedSpecialties
                     : fallback(parsedUrgency).suggestedSpecialties,
+            suggestedDoctors: await pickSuggestedDoctors(
+                suggestedSpecialties.length > 0
+                    ? suggestedSpecialties
+                    : fallback(parsedUrgency).suggestedSpecialties,
+            ),
             recommendations,
             urgencyLevel: parsedUrgency,
         };
     } catch (error) {
         console.error("Consultation AI suggestion failed:", error);
-        return fallback(urgencyLevel);
+        const base = fallback(urgencyLevel);
+        try {
+            return {
+                ...base,
+                suggestedDoctors: await pickSuggestedDoctors(
+                    base.suggestedSpecialties,
+                ),
+            };
+        } catch {
+            return base;
+        }
     }
 };
 

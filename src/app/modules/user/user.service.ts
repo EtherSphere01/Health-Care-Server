@@ -452,63 +452,90 @@ const updateMyProfie = async (user: IAuthUser, req: Request) => {
             "profilePhoto",
         ]);
 
-        // Upsert health data if provided
-        const shouldUpsertHealthData =
+        const hasHealthPayload =
             patientHealthDataRaw && typeof patientHealthDataRaw === "object";
 
-        if (shouldUpsertHealthData) {
-            const patient = await prisma.patient.findUnique({
+        if (!hasHealthPayload) {
+            await prisma.patient.update({
                 where: { email: userInfo.email },
-                select: { id: true },
+                data: allowedPatient,
             });
+            return getMyProfile(user);
+        }
 
-            if (!patient?.id) {
-                throw new ApiError(
-                    httpStatus.NOT_FOUND,
-                    "Patient profile not found",
-                );
-            }
+        const patient = await prisma.patient.findUnique({
+            where: { email: userInfo.email },
+            select: {
+                id: true,
+                patientHealthData: {
+                    select: { id: true },
+                },
+            },
+        });
 
-            const allowedHealthData = pickAllowed(patientHealthDataRaw as any, [
-                "gender",
-                "dateOfBirth",
-                "bloodGroup",
-                "hasAllergies",
-                "hasDiabetes",
-                "height",
-                "weight",
-                "smokingStatus",
-                "dietaryPreferences",
-                "pregnancyStatus",
-                "mentalHealthHistory",
-                "immunizationStatus",
-                "hasPastSurgeries",
-                "recentAnxiety",
-                "recentDepression",
-                "maritalStatus",
-            ]);
+        if (!patient?.id) {
+            throw new ApiError(
+                httpStatus.NOT_FOUND,
+                "Patient profile not found",
+            );
+        }
 
+        const allowedHealthData = pickAllowed(patientHealthDataRaw as any, [
+            "gender",
+            "dateOfBirth",
+            "bloodGroup",
+            "hasAllergies",
+            "hasDiabetes",
+            "height",
+            "weight",
+            "smokingStatus",
+            "dietaryPreferences",
+            "pregnancyStatus",
+            "mentalHealthHistory",
+            "immunizationStatus",
+            "hasPastSurgeries",
+            "recentAnxiety",
+            "recentDepression",
+            "maritalStatus",
+        ]);
+
+        const hasAnyHealthField = Object.keys(allowedHealthData).length > 0;
+
+        // If no health fields were provided, just update base patient fields.
+        if (!hasAnyHealthField) {
+            await prisma.patient.update({
+                where: { email: userInfo.email },
+                data: allowedPatient,
+            });
+            return getMyProfile(user);
+        }
+
+        // If health data already exists, we can safely apply partial updates.
+        if (patient.patientHealthData?.id) {
             await prisma.patient.update({
                 where: { email: userInfo.email },
                 data: {
                     ...allowedPatient,
                     patientHealthData: {
-                        upsert: {
-                            create: {
-                                ...allowedHealthData,
-                                patientId: patient.id,
-                            },
-                            update: allowedHealthData,
-                        },
+                        update: allowedHealthData,
                     },
                 },
             });
-        } else {
-            await prisma.patient.update({
-                where: { email: userInfo.email },
-                data: allowedPatient,
-            });
+            return getMyProfile(user);
         }
+
+        await prisma.patient.update({
+            where: { email: userInfo.email },
+            data: {
+                ...allowedPatient,
+                patientHealthData: {
+                    create: {
+                        ...(allowedHealthData as any),
+                        patientId: patient.id,
+                    },
+                },
+            },
+        });
 
         return getMyProfile(user);
     }

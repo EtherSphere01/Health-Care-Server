@@ -2,13 +2,13 @@ model PatientHealthData {
   id                  String        @id @default(uuid())
   patientId           String        @unique
   patient             Patient       @relation(fields: [patientId], references: [id])
-  gender              Gender
-  dateOfBirth         String
-  bloodGroup          BloodGroup
+  gender              Gender?
+  dateOfBirth         String?
+  bloodGroup          BloodGroup?
   hasAllergies        Boolean?      @default(false)
   hasDiabetes         Boolean?      @default(false)
-  height              String
-  weight              String
+  height              String?
+  weight              String?
   smokingStatus       Boolean?      @default(false)
   dietaryPreferences  String?
   pregnancyStatus     Boolean?      @default(false)

@@ -160,6 +160,12 @@ async function httpRequest({ name, method, url, headers, body }) {
     const maxRetries = Number(process.env.VERIFY_MAX_RETRIES ?? 12);
     let attempt = 0;
 
+    // Allow the backend to detect verification traffic (used to relax certain
+    // dev-only constraints like payment rate limiting).
+    if (headers instanceof Headers && !headers.has("x-api-verify")) {
+        headers.set("x-api-verify", "1");
+    }
+
     while (true) {
         const res = await fetch(url, {
             method,
@@ -559,72 +565,90 @@ async function runSetupFlow({ baseUrl, collectionPath }) {
         const headers = new Headers({ "content-type": "application/json" });
         headers.set("authorization", vars.accessToken);
 
-        // Vary the time window per run to avoid reusing existing schedule slots.
-        const startHour = 6 + (unique % 10); // 06:00..15:00
-        const endHour = startHour + 5; // 5h => 10 slots at 30m
         const pad2 = (n) => String(n).padStart(2, "0");
-        const startTime = `${pad2(startHour)}:00`;
-        const endTime = `${pad2(endHour)}:00`;
+        // Vary the time window per run to avoid reusing existing schedule slots.
+        // Retry a few times if the window overlaps with existing slots.
+        const wanted = 12;
+        const maxAttempts = 5;
+        const idSet = new Set();
 
-        const result = await httpRequest({
-            name: "Setup: Create schedule",
-            method: "POST",
-            url: `${baseUrl}/schedule`,
-            headers,
-            body: JSON.stringify({
-                startDate: yyyyMmDd,
-                endDate: yyyyMmDd,
-                startTime,
-                endTime,
-            }),
-        });
+        let lastCreateResult = null;
 
-        if (!result.ok) {
-            printResultLine(result);
-            throw new Error(
-                `Create schedule failed (HTTP ${result.status}): ${result.text.slice(0, 300)}`,
-            );
-        }
+        for (
+            let attempt = 0;
+            attempt < maxAttempts && idSet.size < wanted;
+            attempt++
+        ) {
+            const startHour = 6 + ((unique + attempt * 3) % 10); // 06:00..15:00
+            const endHour = startHour + 6; // 6h => 12 slots at 30m
+            const startTime = `${pad2(startHour)}:00`;
+            const endTime = `${pad2(endHour)}:00`;
 
-        // Prefer IDs returned by the create call (newly created slots).
-        const created = result.json?.data;
-        scheduleIds = Array.isArray(created)
-            ? created.map((s) => s?.id).filter(Boolean)
-            : [];
-
-        // If nothing was created (all slots already existed), fall back to listing the day.
-        if (scheduleIds.length === 0) {
-            const listHeaders = new Headers();
-            listHeaders.set("authorization", vars.accessToken);
-            const listResult = await httpRequest({
-                name: "Setup: Fetch schedule fallback",
-                method: "GET",
-                url: `${baseUrl}/schedule?startDate=${encodeURIComponent(yyyyMmDd)}&endDate=${encodeURIComponent(yyyyMmDd)}&limit=50&page=1`,
-                headers: listHeaders,
+            const result = await httpRequest({
+                name: `Setup: Create schedule (attempt ${attempt + 1})`,
+                method: "POST",
+                url: `${baseUrl}/schedule`,
+                headers,
+                body: JSON.stringify({
+                    startDate: yyyyMmDd,
+                    endDate: yyyyMmDd,
+                    startTime,
+                    endTime,
+                }),
             });
 
-            if (!listResult.ok) {
-                printResultLine(listResult);
-                throw new Error(
-                    `Schedule fallback fetch failed (HTTP ${listResult.status}): ${listResult.text.slice(0, 300)}`,
-                );
+            lastCreateResult = result;
+
+            if (!result.ok) {
+                printResultLine(result);
+                continue;
             }
 
-            const listData = listResult.json?.data;
-            scheduleIds = Array.isArray(listData)
-                ? listData.map((s) => s?.id).filter(Boolean)
+            const created = result.json?.data;
+            const createdIds = Array.isArray(created)
+                ? created.map((s) => s?.id).filter(Boolean)
                 : [];
-            printResultLine(listResult);
+            for (const id of createdIds) idSet.add(id);
+
+            // If nothing was created (all slots already existed), fall back to listing the day.
+            if (createdIds.length === 0) {
+                const listHeaders = new Headers();
+                listHeaders.set("authorization", vars.accessToken);
+                const listResult = await httpRequest({
+                    name: "Setup: Fetch schedule fallback",
+                    method: "GET",
+                    url: `${baseUrl}/schedule?startDate=${encodeURIComponent(yyyyMmDd)}&endDate=${encodeURIComponent(yyyyMmDd)}&limit=100&page=1`,
+                    headers: listHeaders,
+                });
+
+                if (!listResult.ok) {
+                    printResultLine(listResult);
+                } else {
+                    const listData = listResult.json?.data;
+                    const listIds = Array.isArray(listData)
+                        ? listData.map((s) => s?.id).filter(Boolean)
+                        : [];
+                    for (const id of listIds) idSet.add(id);
+                    printResultLine(listResult);
+                }
+            }
+
+            printResultLine(result);
         }
 
+        scheduleIds = Array.from(idSet);
+
         if (scheduleIds.length < 5) {
+            if (lastCreateResult) printResultLine(lastCreateResult);
             throw new Error(
-                `Not enough schedules available for verification (need 5+, got ${scheduleIds.length}). Try a different date/time window.`,
+                `Not enough schedules available for verification (need 5+, got ${scheduleIds.length}).`,
             );
         }
 
-        // We'll pick concrete unbooked schedule IDs after doctor assignment.
-        printResultLine(result);
+        // Reserve a deletable schedule ID for the Postman "Schedule Module" CRUD.
+        // We keep appointment booking on a separate placeholder (schedule-uuid).
+        placeholderMap["schedule-delete-uuid"] =
+            scheduleIds[scheduleIds.length - 1];
     }
 
     // 6) Assign schedule to doctor (doctor)
@@ -637,7 +661,12 @@ async function runSetupFlow({ baseUrl, collectionPath }) {
             method: "POST",
             url: `${baseUrl}/doctor-schedule`,
             headers,
-            body: JSON.stringify({ scheduleIds: scheduleIds.slice(0, 5) }),
+            body: JSON.stringify({
+                scheduleIds: scheduleIds.slice(
+                    0,
+                    Math.min(8, scheduleIds.length),
+                ),
+            }),
         });
 
         if (!result.ok) {

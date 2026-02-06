@@ -332,6 +332,14 @@ const requestPatientRegistrationOtp = async (payload: {
     email: string;
     password: string;
 }) => {
+    const otpDelegate = (prisma as any).patientRegistrationOtp;
+    if (!otpDelegate?.upsert) {
+        throw new ApiError(
+            httpStatus.INTERNAL_SERVER_ERROR,
+            "OTP registration is not configured on the server (missing PatientRegistrationOtp model). Run prisma generate/migrations and restart the server.",
+        );
+    }
+
     const email = String(payload.email ?? "")
         .trim()
         .toLowerCase();
@@ -367,7 +375,7 @@ const requestPatientRegistrationOtp = async (payload: {
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await prisma.patientRegistrationOtp.upsert({
+    await otpDelegate.upsert({
         where: { email },
         create: {
             email,
@@ -398,30 +406,55 @@ const requestPatientRegistrationOtp = async (payload: {
     });
 
     const isTestMode = process.env.ENABLE_TEST_ENDPOINTS === "1";
-    if (!isTestMode) {
-        await emailSender(
-            email,
-            `
+
+    const otpHtml = `
             <div style="font-family: Arial, sans-serif; line-height: 1.5;">
               <h2>Nexus Health - Verify your email</h2>
               <p>Your OTP code is:</p>
               <p style="font-size: 24px; font-weight: 700; letter-spacing: 2px;">${otp}</p>
               <p>This code will expire in 10 minutes.</p>
             </div>
-            `,
-            "Your OTP Code",
-        );
-        return { email };
+            `;
+
+    // In test mode we still try to send the email *if* SMTP is configured,
+    // but we never block the flow on SMTP (automation depends on returning otp).
+    const smtpConfigured = Boolean(
+        config.emailSender.email && config.emailSender.app_pass,
+    );
+    const shouldAttemptSend = !isTestMode || smtpConfigured;
+
+    if (shouldAttemptSend) {
+        if (isTestMode) {
+            try {
+                await emailSender(email, otpHtml, "Your OTP Code");
+            } catch {
+                // ignore SMTP failures in test mode
+            }
+        } else {
+            await emailSender(email, otpHtml, "Your OTP Code");
+        }
     }
 
-    // Test-mode: return OTP so automation doesn't depend on SMTP.
-    return { email, otp };
+    if (isTestMode) {
+        // Test-mode: return OTP so automation doesn't depend on SMTP.
+        return { email, otp };
+    }
+
+    return { email };
 };
 
 const verifyPatientRegistrationOtp = async (payload: {
     email: string;
     otp: string;
 }) => {
+    const otpDelegate = (prisma as any).patientRegistrationOtp;
+    if (!otpDelegate?.findUnique || !otpDelegate?.delete) {
+        throw new ApiError(
+            httpStatus.INTERNAL_SERVER_ERROR,
+            "OTP registration is not configured on the server (missing PatientRegistrationOtp model). Run prisma generate/migrations and restart the server.",
+        );
+    }
+
     const email = String(payload.email ?? "")
         .trim()
         .toLowerCase();
@@ -434,7 +467,7 @@ const verifyPatientRegistrationOtp = async (payload: {
         throw new ApiError(httpStatus.BAD_REQUEST, "OTP is required");
     }
 
-    const record = await prisma.patientRegistrationOtp.findUnique({
+    const record = await otpDelegate.findUnique({
         where: { email },
     });
     if (!record) {
@@ -445,7 +478,7 @@ const verifyPatientRegistrationOtp = async (payload: {
     }
 
     if (record.expiresAt.getTime() < Date.now()) {
-        await prisma.patientRegistrationOtp.delete({ where: { email } });
+        await otpDelegate.delete({ where: { email } });
         throw new ApiError(httpStatus.BAD_REQUEST, "OTP has expired");
     }
 
@@ -458,7 +491,7 @@ const verifyPatientRegistrationOtp = async (payload: {
 
     const isMatch = await bcrypt.compare(otp, record.otpHash);
     if (!isMatch) {
-        await prisma.patientRegistrationOtp.update({
+        await otpDelegate.update({
             where: { email },
             data: { attempts: { increment: 1 } },
         });
@@ -478,7 +511,7 @@ const verifyPatientRegistrationOtp = async (payload: {
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
-        await prisma.patientRegistrationOtp.delete({ where: { email } });
+        await otpDelegate.delete({ where: { email } });
         throw new ApiError(
             httpStatus.CONFLICT,
             "User with this email already exists",
@@ -502,7 +535,7 @@ const verifyPatientRegistrationOtp = async (payload: {
             },
         });
 
-        await tx.patientRegistrationOtp.delete({ where: { email } });
+        await (tx as any).patientRegistrationOtp.delete({ where: { email } });
     });
 
     return { email };

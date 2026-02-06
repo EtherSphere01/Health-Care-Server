@@ -1,5 +1,6 @@
 import {
     AppointmentStatus,
+    NotificationType,
     PaymentStatus,
     Prisma,
     UserRole,
@@ -35,7 +36,8 @@ const createAppointment = async (user: IAuthUser, payload: any) => {
         },
     });
 
-    const videoCallingId = uuidv4();
+    const roomId = uuidv4();
+    const videoCallingId = `https://meet.jit.si/${roomId}`;
 
     const result = await prisma.$transaction(async (tnx) => {
         const appointmentData = await tnx.appointment.create({
@@ -45,6 +47,27 @@ const createAppointment = async (user: IAuthUser, payload: any) => {
                 scheduleId: payload.scheduleId,
                 videoCallingId,
             },
+        });
+
+        await tnx.notification.createMany({
+            data: [
+                {
+                    recipientEmail: patientData.email,
+                    recipientRole: UserRole.PATIENT,
+                    type: NotificationType.APPOINTMENT_CREATED,
+                    title: "Appointment booked",
+                    message: `Your appointment with ${doctorData.name} has been booked.`,
+                    link: "/dashboard/my-appointments",
+                },
+                {
+                    recipientEmail: doctorData.email,
+                    recipientRole: UserRole.DOCTOR,
+                    type: NotificationType.APPOINTMENT_CREATED,
+                    title: "New appointment",
+                    message: `You have a new appointment with ${patientData.name}.`,
+                    link: "/doctor/dashboard/appointments",
+                },
+            ],
         });
 
         await tnx.doctorSchedules.update({
@@ -207,6 +230,7 @@ const updateAppointmentStatus = async (
         },
         include: {
             doctor: true,
+            patient: true,
         },
     });
 
@@ -218,7 +242,7 @@ const updateAppointmentStatus = async (
             );
     }
 
-    return await prisma.appointment.update({
+    const updated = await prisma.appointment.update({
         where: {
             id: appointmentId,
         },
@@ -226,6 +250,29 @@ const updateAppointmentStatus = async (
             status,
         },
     });
+
+    await prisma.notification.createMany({
+        data: [
+            {
+                recipientEmail: appointmentData.patient.email,
+                recipientRole: UserRole.PATIENT,
+                type: NotificationType.APPOINTMENT_STATUS_UPDATED,
+                title: "Appointment updated",
+                message: `Your appointment status is now ${status}.`,
+                link: "/dashboard/my-appointments",
+            },
+            {
+                recipientEmail: appointmentData.doctor.email,
+                recipientRole: UserRole.DOCTOR,
+                type: NotificationType.APPOINTMENT_STATUS_UPDATED,
+                title: "Appointment updated",
+                message: `Appointment status is now ${status}.`,
+                link: "/doctor/dashboard/appointments",
+            },
+        ],
+    });
+
+    return updated;
 };
 
 const getAllFromDB = async (filters: any, options: IPaginationOptions) => {
@@ -381,7 +428,8 @@ const createAppointmentWithPayLater = async (user: IAuthUser, payload: any) => {
         },
     });
 
-    const videoCallingId = uuidv4();
+    const roomId = uuidv4();
+    const videoCallingId = `https://meet.jit.si/${roomId}`;
 
     const result = await prisma.$transaction(async (tnx) => {
         const appointmentData = await tnx.appointment.create({
@@ -396,6 +444,27 @@ const createAppointmentWithPayLater = async (user: IAuthUser, payload: any) => {
                 doctor: true,
                 schedule: true,
             },
+        });
+
+        await tnx.notification.createMany({
+            data: [
+                {
+                    recipientEmail: patientData.email,
+                    recipientRole: UserRole.PATIENT,
+                    type: NotificationType.APPOINTMENT_CREATED,
+                    title: "Appointment booked",
+                    message: `Your appointment with ${doctorData.name} has been booked.`,
+                    link: "/dashboard/my-appointments",
+                },
+                {
+                    recipientEmail: doctorData.email,
+                    recipientRole: UserRole.DOCTOR,
+                    type: NotificationType.APPOINTMENT_CREATED,
+                    title: "New appointment",
+                    message: `You have a new appointment with ${patientData.name}.`,
+                    link: "/doctor/dashboard/appointments",
+                },
+            ],
         });
 
         await tnx.doctorSchedules.update({
@@ -468,6 +537,43 @@ const initiatePaymentForAppointment = async (
         );
     }
 
+    const amount = Number(appointment.payment?.amount ?? 0);
+    const transactionId = String(appointment.payment?.transactionId ?? "");
+
+    if (!appointment.payment || !transactionId) {
+        throw new ApiError(
+            httpStatus.INTERNAL_SERVER_ERROR,
+            "Payment record not found for this appointment",
+        );
+    }
+
+    // Stripe does not allow 0 amount checkouts. Treat 0 as a free appointment.
+    if (amount <= 0) {
+        await prisma.$transaction(async (tx) => {
+            await tx.payment.update({
+                where: { id: appointment.payment!.id },
+                data: {
+                    status: PaymentStatus.PAID,
+                    paymentGatewayData: {
+                        provider: "free",
+                        amount,
+                        markedPaidAt: new Date().toISOString(),
+                    },
+                },
+            });
+
+            await tx.appointment.update({
+                where: { id: appointment.id },
+                data: { paymentStatus: PaymentStatus.PAID },
+            });
+        });
+
+        return {
+            paymentUrl: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/my-appointments`,
+            transactionId,
+        };
+    }
+
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
@@ -480,7 +586,7 @@ const initiatePaymentForAppointment = async (
                     product_data: {
                         name: `Appointment with ${appointment.doctor.name}`,
                     },
-                    unit_amount: appointment.payment!.amount * 100,
+                    unit_amount: amount * 100,
                 },
                 quantity: 1,
             },
@@ -493,7 +599,7 @@ const initiatePaymentForAppointment = async (
         cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/my-appointments?session_id={CHECKOUT_SESSION_ID}`,
     });
 
-    return { paymentUrl: session.url };
+    return { paymentUrl: session.url, transactionId };
 };
 
 export const AppointmentService = {

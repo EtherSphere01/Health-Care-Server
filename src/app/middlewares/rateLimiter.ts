@@ -18,6 +18,9 @@ export const paymentLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
     max: 10,
     message: "Too many payment attempts, please try again later.",
+    skip: (req) =>
+        process.env.NODE_ENV !== "production" &&
+        req.headers["x-api-verify"] === "1",
     standardHeaders: true,
     legacyHeaders: false,
 });

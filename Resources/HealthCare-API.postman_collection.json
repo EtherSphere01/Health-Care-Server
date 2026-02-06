@@ -1172,7 +1172,7 @@
                             "variable": [
                                 {
                                     "key": "id",
-                                    "value": "schedule-uuid"
+                                    "value": "schedule-delete-uuid"
                                 }
                             ]
                         },
@@ -1235,7 +1235,7 @@
                             "variable": [
                                 {
                                     "key": "id",
-                                    "value": "schedule-uuid"
+                                    "value": "schedule-delete-uuid"
                                 }
                             ]
                         },

@@ -1,4 +1,9 @@
-import { PaymentStatus, Prisma } from "@prisma/client";
+import {
+    NotificationType,
+    PaymentStatus,
+    Prisma,
+    UserRole,
+} from "@prisma/client";
 import httpStatus from "http-status";
 import { paginationHelper } from "../../../helpers/paginationHelper";
 import prisma from "../../../shared/prisma";
@@ -9,25 +14,38 @@ import { IPaginationOptions } from "../../interfaces/pagination";
 const insertIntoDB = async (user: IAuthUser, payload: any) => {
     const patientData = await prisma.patient.findUniqueOrThrow({
         where: {
-            email: user?.email
-        }
+            email: user?.email,
+        },
     });
 
     const appointmentData = await prisma.appointment.findUniqueOrThrow({
         where: {
-            id: payload.appointmentId
-        }
+            id: payload.appointmentId,
+        },
+    });
+
+    const doctorData = await prisma.doctor.findUniqueOrThrow({
+        where: {
+            id: appointmentData.doctorId,
+        },
+        select: {
+            email: true,
+            name: true,
+        },
     });
 
     if (appointmentData.paymentStatus !== PaymentStatus.PAID) {
         throw new ApiError(
             httpStatus.BAD_REQUEST,
-            "Payment must be completed before submitting a review"
+            "Payment must be completed before submitting a review",
         );
     }
 
     if (!(patientData.id === appointmentData.patientId)) {
-        throw new ApiError(httpStatus.BAD_REQUEST, "This is not your appointment!")
+        throw new ApiError(
+            httpStatus.BAD_REQUEST,
+            "This is not your appointment!",
+        );
     }
 
     return await prisma.$transaction(async (tx) => {
@@ -37,33 +55,41 @@ const insertIntoDB = async (user: IAuthUser, payload: any) => {
                 doctorId: appointmentData.doctorId,
                 patientId: appointmentData.patientId,
                 rating: payload.rating,
-                comment: payload.comment
-            }
+                comment: payload.comment,
+            },
+        });
+
+        await tx.notification.create({
+            data: {
+                recipientEmail: doctorData.email,
+                recipientRole: UserRole.DOCTOR,
+                type: NotificationType.REVIEW_CREATED,
+                title: "New review received",
+                message: `${patientData.name} left you a ${payload.rating}/5 review.`,
+                link: "/doctor/dashboard",
+            },
         });
 
         const averageRating = await tx.review.aggregate({
             _avg: {
-                rating: true
-            }
+                rating: true,
+            },
         });
 
         await tx.doctor.update({
             where: {
-                id: result.doctorId
+                id: result.doctorId,
             },
             data: {
-                averageRating: averageRating._avg.rating as number
-            }
-        })
+                averageRating: averageRating._avg.rating as number,
+            },
+        });
 
         return result;
-    })
+    });
 };
 
-const getAllFromDB = async (
-    filters: any,
-    options: IPaginationOptions,
-) => {
+const getAllFromDB = async (filters: any, options: IPaginationOptions) => {
     const { limit, page, skip } = paginationHelper.calculatePagination(options);
     const { patientEmail, doctorEmail } = filters;
     const andConditions = [];
@@ -71,17 +97,17 @@ const getAllFromDB = async (
     if (patientEmail) {
         andConditions.push({
             patient: {
-                email: patientEmail
-            }
-        })
+                email: patientEmail,
+            },
+        });
     }
 
     if (doctorEmail) {
         andConditions.push({
             doctor: {
-                email: doctorEmail
-            }
-        })
+                email: doctorEmail,
+            },
+        });
     }
 
     const whereConditions: Prisma.ReviewWhereInput =
@@ -95,8 +121,8 @@ const getAllFromDB = async (
             options.sortBy && options.sortOrder
                 ? { [options.sortBy]: options.sortOrder }
                 : {
-                    createdAt: 'desc',
-                },
+                      createdAt: "desc",
+                  },
         include: {
             doctor: true,
             patient: true,
@@ -119,5 +145,5 @@ const getAllFromDB = async (
 
 export const ReviewService = {
     insertIntoDB,
-    getAllFromDB
-}
+    getAllFromDB,
+};

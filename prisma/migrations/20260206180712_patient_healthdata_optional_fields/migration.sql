@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "patient_health_datas" ALTER COLUMN "gender" DROP NOT NULL,
+ALTER COLUMN "dateOfBirth" DROP NOT NULL,
+ALTER COLUMN "bloodGroup" DROP NOT NULL,
+ALTER COLUMN "height" DROP NOT NULL,
+ALTER COLUMN "weight" DROP NOT NULL;
