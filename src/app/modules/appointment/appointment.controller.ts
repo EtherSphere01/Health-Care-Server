@@ -8,6 +8,11 @@ import { appointmentFilterableFields } from "./appointment.constant";
 import { AppointmentService } from "./appointment.service";
 
 function getRequestOrigin(req: Request): string | undefined {
+    const explicit = req.headers["x-frontend-origin"];
+    if (typeof explicit === "string" && explicit.trim()) return explicit.trim();
+    if (Array.isArray(explicit) && explicit[0]?.trim())
+        return explicit[0].trim();
+
     const origin = req.headers.origin;
     if (typeof origin === "string" && origin.trim()) return origin.trim();
 

@@ -196,7 +196,12 @@ const getMyAppointment = async (
                 ? {
                       patient: true,
                       schedule: true,
-                      prescription: true,
+                      prescription: {
+                          include: {
+                              patient: true,
+                              doctor: true,
+                          },
+                      },
                       review: true,
                       payment: true,
                       doctor: {
@@ -220,7 +225,12 @@ const getMyAppointment = async (
                           },
                       },
                       schedule: true,
-                      prescription: true,
+                      prescription: {
+                          include: {
+                              patient: true,
+                              doctor: true,
+                          },
+                      },
                       review: true,
                       payment: true,
                       patient: true,
