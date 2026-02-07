@@ -27,6 +27,19 @@ function addMinutes(date: Date, minutes: number) {
     return new Date(date.getTime() + minutes * 60 * 1000);
 }
 
+function randInt(min: number, max: number) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function shuffle<T>(arr: T[]) {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+}
+
 async function wipeDatabase() {
     // Delete dependents first to satisfy foreign keys.
     await prisma.payment.deleteMany();
@@ -201,21 +214,57 @@ async function seed() {
     const doctorProfiles = doctors.map((u) => u.doctor).filter(Boolean);
 
     console.log("🧩 Assigning doctor specialties...");
-    for (let i = 0; i < doctorProfiles.length; i++) {
-        const doctor = doctorProfiles[i]!;
-        const primary = pick(specialties, i);
-        const secondary = pick(specialties, i + 7);
+    // Ensure each specialty (department) has 3–6 doctors.
+    // This is a many-to-many relationship, so doctors can have multiple specialties.
+    const doctorSpecialtiesRows: {
+        doctorId: string;
+        specialitiesId: string;
+    }[] = [];
+    const doctorAssignedCount = new Map<string, number>();
+    const used = new Set<string>();
 
-        await prisma.doctorSpecialties.create({
-            data: { doctorId: doctor.id, specialitiesId: primary.id },
-        });
+    for (const specialty of specialties) {
+        const desiredDoctorsForSpecialty = randInt(3, 6);
+        const selectedDoctors = shuffle(doctorProfiles).slice(
+            0,
+            Math.min(desiredDoctorsForSpecialty, doctorProfiles.length),
+        );
 
-        if (i % 2 === 0 && secondary.id !== primary.id) {
-            await prisma.doctorSpecialties.create({
-                data: { doctorId: doctor.id, specialitiesId: secondary.id },
+        for (const doctor of selectedDoctors) {
+            if (!doctor) continue;
+            const key = `${doctor.id}:${specialty.id}`;
+            if (used.has(key)) continue;
+            used.add(key);
+            doctorSpecialtiesRows.push({
+                doctorId: doctor.id,
+                specialitiesId: specialty.id,
+            });
+            doctorAssignedCount.set(
+                doctor.id,
+                (doctorAssignedCount.get(doctor.id) ?? 0) + 1,
+            );
+        }
+    }
+
+    // Ensure every doctor has at least one specialty.
+    for (const doctor of doctorProfiles) {
+        if (!doctor) continue;
+        if ((doctorAssignedCount.get(doctor.id) ?? 0) > 0) continue;
+        const fallback = pick(specialties, doctorProfiles.indexOf(doctor));
+        const key = `${doctor.id}:${fallback.id}`;
+        if (!used.has(key)) {
+            used.add(key);
+            doctorSpecialtiesRows.push({
+                doctorId: doctor.id,
+                specialitiesId: fallback.id,
             });
         }
     }
+
+    await prisma.doctorSpecialties.createMany({
+        data: doctorSpecialtiesRows,
+        skipDuplicates: true,
+    });
 
     console.log("🧑‍🤝‍🧑 Seeding patients (20)...");
     const patients = await Promise.all(
