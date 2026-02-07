@@ -12,7 +12,7 @@
         "db:push": "prisma db push --schema=./prisma/schema",
         "db:pull": "prisma db pull --schema=./prisma/schema",
         "db:studio": "prisma studio --schema=./prisma/schema",
-        "postinstall": "prisma generate --schema=./prisma/schema",
+        "postinstall": "npx prisma generate",
         "stripe:webhook": "stripe listen --forward-to localhost:5000/webhook"
     },
     "devDependencies": {
@@ -25,6 +25,8 @@
         "@types/node": "^24.0.10",
         "@types/nodemailer": "^6.4.17",
         "@types/pg": "^8.15.6",
+        "@types/swagger-jsdoc": "^6.0.4",
+        "@types/swagger-ui-express": "^4.1.8",
         "prisma": "^7.0.1",
         "ts-node-dev": "^2.0.0",
         "typescript": "^5.8.3"
@@ -47,6 +49,8 @@
         "nodemailer": "^7.0.5",
         "pg": "^8.16.3",
         "stripe": "^19.1.0",
+        "swagger-jsdoc": "^6.2.8",
+        "swagger-ui-express": "^5.0.1",
         "uuid": "^11.1.0",
         "zod": "^4.0.3"
     }
