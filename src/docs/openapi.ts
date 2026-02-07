@@ -86,7 +86,11 @@ export function createOpenApiSpec(): any {
         ? `https://${process.env.VERCEL_URL}`
         : undefined;
 
-    const serverUrl = process.env.SWAGGER_SERVER_URL || vercelUrl || "/";
+    const rawServerUrl = process.env.SWAGGER_SERVER_URL || vercelUrl || "/";
+    const serverUrl =
+        rawServerUrl !== "/" && !/^https?:\/\//i.test(rawServerUrl)
+            ? `https://${rawServerUrl}`
+            : rawServerUrl;
 
     const spec: any = {
         openapi: "3.0.3",

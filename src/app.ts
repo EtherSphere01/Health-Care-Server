@@ -18,9 +18,15 @@ app.post(
     PaymentController.handleStripeWebhookEvent,
 );
 
+const backendOrigins = [
+    process.env.SWAGGER_SERVER_URL,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+].filter(Boolean) as string[];
+
 const allowedOrigins = [
     "http://localhost:3000",
     "http://localhost:3001",
+    ...backendOrigins,
     ...(process.env.FRONTEND_URL
         ? process.env.FRONTEND_URL.split(",")
               .map((s) => s.trim())
