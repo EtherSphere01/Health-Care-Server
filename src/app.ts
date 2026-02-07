@@ -34,6 +34,24 @@ const allowedOrigins = [
         : []),
 ];
 
+// If the request is same-origin, CORS should not block it.
+// Some browsers still include the Origin header on same-origin POSTs;
+// the `cors` middleware would otherwise enforce the allowlist.
+app.use((req, _res, next) => {
+    const origin = req.headers.origin;
+    const host = req.headers.host;
+
+    if (
+        origin &&
+        host &&
+        (origin === `https://${host}` || origin === `http://${host}`)
+    ) {
+        delete (req.headers as any).origin;
+    }
+
+    next();
+});
+
 app.use(
     cors({
         origin: (origin, callback) => {
