@@ -7,6 +7,8 @@ import globalErrorHandler from "./app/middlewares/globalErrorHandler";
 import router from "./app/routes";
 import { PaymentController } from "./app/modules/payment/payment.controller";
 import { AppointmentService } from "./app/modules/appointment/appointment.service";
+import swaggerUi from "swagger-ui-express";
+import { createOpenApiSpec } from "./docs/openapi";
 
 const app: Application = express();
 app.use(cookieParser());
@@ -27,6 +29,21 @@ app.use(
 //parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Swagger / OpenAPI
+app.get("/docs-json", (req: Request, res: Response) => {
+    res.json(createOpenApiSpec());
+});
+
+app.use(
+    "/docs",
+    swaggerUi.serve,
+    swaggerUi.setup(createOpenApiSpec(), {
+        swaggerOptions: {
+            persistAuthorization: true,
+        },
+    }),
+);
 
 cron.schedule("*/10 * * * *", () => {
     try {

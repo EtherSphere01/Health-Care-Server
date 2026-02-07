@@ -13,52 +13,62 @@ const insertIntoDB = catchAsync(async (req: Request, res: Response) => {
         statusCode: httpStatus.OK,
         success: true,
         message: "Schedule created successfully!",
-        data: result
+        data: result,
     });
 });
 
-const getAllFromDB = catchAsync(async (req: Request & { user?: IAuthUser }, res: Response) => {
-    const filters = pick(req.query, ['startDate', 'endDate']);
-    const options = pick(req.query, ['limit', 'page', 'sortBy', 'sortOrder']);
+const getAllFromDB = catchAsync(
+    async (req: Request & { user?: IAuthUser }, res: Response) => {
+        const filters = pick(req.query, ["startDate", "endDate"]);
+        const options = pick(req.query, [
+            "limit",
+            "page",
+            "sortBy",
+            "sortOrder",
+        ]);
 
-    const user = req.user;
-    const result = await ScheduleService.getAllFromDB(filters, options, user as IAuthUser);
+        const user = req.user;
+        const result = await ScheduleService.getAllFromDB(
+            filters,
+            options,
+            user as IAuthUser,
+        );
 
-    sendResponse(res, {
-        statusCode: httpStatus.OK,
-        success: true,
-        message: "Schedule fetched successfully!",
-        data: result.data,
-        meta: result.meta
-    });
-});
+        sendResponse(res, {
+            statusCode: httpStatus.OK,
+            success: true,
+            message: "Schedule fetched successfully!",
+            data: result.data,
+            meta: result.meta,
+        });
+    },
+);
 
 const getByIdFromDB = catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const result = await ScheduleService.getByIdFromDB(id);
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
-        message: 'Schedule retrieval successfully',
+        message: "Schedule retrieval successfully",
         data: result,
     });
 });
 
 const deleteFromDB = catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const result = await ScheduleService.deleteFromDB(id);
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
-        message: 'Schedule deleted successfully',
+        message: "Schedule deleted successfully",
         data: result,
     });
 });
-
 
 export const ScheduleController = {
     insertIntoDB,
     getAllFromDB,
     getByIdFromDB,
-    deleteFromDB
+    deleteFromDB,
 };

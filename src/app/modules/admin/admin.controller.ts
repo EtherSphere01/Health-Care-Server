@@ -28,7 +28,7 @@ const getAllFromDB: RequestHandler = catchAsync(
 );
 
 const getByIdFromDB = catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const result = await AdminService.getByIdFromDB(id);
     sendResponse(res, {
@@ -40,7 +40,7 @@ const getByIdFromDB = catchAsync(async (req: Request, res: Response) => {
 });
 
 const updateIntoDB = catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const result = await AdminService.updateIntoDB(id, req.body);
     sendResponse(res, {
@@ -52,7 +52,7 @@ const updateIntoDB = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteFromDB = catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const result = await AdminService.deleteFromDB(id);
     sendResponse(res, {
@@ -64,7 +64,7 @@ const deleteFromDB = catchAsync(async (req: Request, res: Response) => {
 });
 
 const softDeleteFromDB = catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const result = await AdminService.softDeleteFromDB(id);
     sendResponse(res, {

@@ -9,17 +9,13 @@ Short description: A scalable TypeScript + Express + Prisma REST API for healthc
 
 A robust and scalable REST API for a complete HealthCare Management System. This backend manages Users (Admins, Doctors, Patients), Appointments, Prescriptions, Real-time Scheduling, Payments via Stripe, and AI-powered doctor recommendations.
 
+## Live Frontend:
+
+## Live Backend:
+
+Frontend Repo: https://github.com/EtherSphere01/Health-Care-Client.git
+
 ## 🚀 Key Features
-
-- **Role-Based Access Control (RBAC):** Secure authentication for `SUPER_ADMIN`, `ADMIN`, `DOCTOR`, and `PATIENT`.
-- **Advanced Scheduling:** Dynamic time-slot management for doctors and appointment booking.
-- **AI Integration:** Smart doctor/specialty suggestions based on symptoms (using OpenRouter/LLMs).
-- **Payment Gateway:** Seamless integration with Stripe for appointment payments and webhook handling.
-- **Media Management:** Cloudinary integration for profile pictures and specialty icons.
-- **Notification System:** Email notifications for password resets via Nodemailer.
-- **Data Validation:** Strict schema validation using Zod.
-
----
 
 ## 🛠 Technology Stack
 
@@ -99,6 +95,9 @@ APP_PASS=your_app_password
 RESET_PASS_LINK=http://localhost:3000/reset-password
 RESET_PASS_TOKEN=temp_token_string
 RESET_PASS_TOKEN_EXPIRES_IN=5m
+
+# Client URL (used for Stripe success/cancel redirects)
+FRONTEND_URL=http://localhost:3000
 
 # Cloudinary (File Uploads)
 CLOUDINARY_CLOUD_NAME=your_cloud_name
@@ -203,6 +202,24 @@ yarn start
 
 Base URL: http://localhost:5000/api/v1
 
+### 📚 Swagger (OpenAPI) Docs
+
+The server exposes Swagger UI and the raw OpenAPI JSON.
+
+- Swagger UI: `GET /docs`
+- OpenAPI JSON: `GET /docs-json`
+
+#### Configure “Try it out” server URL (recommended for production)
+
+By default, the OpenAPI `servers` entry is relative (`/`) so it works when you open Swagger from the same deployed API origin.
+If you want Swagger “Try it out” to explicitly point to a specific URL, set:
+
+- `SWAGGER_SERVER_URL=https://your-api-domain.com`
+
+Example (local):
+
+- `SWAGGER_SERVER_URL=http://localhost:5000`
+
 ### 1. 🔐 Authentication (/auth)
 
 | Method | Endpoint              | Description                                   |
@@ -214,6 +231,13 @@ Base URL: http://localhost:5000/api/v1
 | POST   | /auth/reset-password  | Reset password using email token              |
 | GET    | /auth/me              | Check authentication status                   |
 
+Patient OTP Registration:
+
+| Method | Endpoint                           | Description                          |
+| :----- | :--------------------------------- | :----------------------------------- |
+| POST   | /auth/register-patient/request-otp | Request OTP for patient registration |
+| POST   | /auth/register-patient/verify-otp  | Verify OTP for patient registration  |
+
 ### 2. 👤 User Management (/user)
 
 | Method | Endpoint                | Description                                            |
@@ -222,7 +246,7 @@ Base URL: http://localhost:5000/api/v1
 | GET    | /user/me                | Get current logged-in user's profile                   |
 | POST   | /user/create-admin      | Create new Admin (Multipart/Form-data)                 |
 | POST   | /user/create-doctor     | Create new Doctor (Multipart/Form-data)                |
-| POST   | /user/create-patient    | Create new Patient (Multipart/Form-data, Public)       |
+| POST   | /user/create-patient    | Create new Patient (Multipart/Form-data, Admin only)   |
 | PATCH  | /user/:id/status        | Update User Status (ACTIVE, BLOCKED)                   |
 | PATCH  | /user/update-my-profile | Update own profile (Multipart/Form-data)               |
 
@@ -238,14 +262,15 @@ Base URL: http://localhost:5000/api/v1
 
 ### 4. 👨‍⚕️ Doctor (/doctor)
 
-| Method | Endpoint           | Description                                              |
-| :----- | :----------------- | :------------------------------------------------------- |
-| GET    | /doctor            | Get all Doctors (Filters: searchTerm, specialties)       |
-| GET    | /doctor/:id        | Get Doctor by ID                                         |
-| GET    | /doctor/suggestion | **AI Feature:** Get doctor suggestions based on symptoms |
-| PATCH  | /doctor/:id        | Update Doctor details & Specialties                      |
-| DELETE | /doctor/:id        | Permanent Delete Doctor                                  |
-| DELETE | /doctor/soft/:id   | Soft Delete Doctor                                       |
+| Method | Endpoint              | Description                                                                    |
+| :----- | :-------------------- | :----------------------------------------------------------------------------- |
+| GET    | /doctor               | Get all Doctors (Filters: searchTerm, specialties)                             |
+| GET    | /doctor/:id           | Get Doctor by ID                                                               |
+| POST   | /doctor/suggestion    | **AI Feature:** Get doctor suggestions based on symptoms                       |
+| POST   | /doctor/ai-suggestion | **AI Feature:** Consultation triage suggestion (specialties + recommendations) |
+| PATCH  | /doctor/:id           | Update Doctor details & Specialties                                            |
+| DELETE | /doctor/:id           | Permanent Delete Doctor                                                        |
+| DELETE | /doctor/soft/:id      | Soft Delete Doctor                                                             |
 
 ### 5. 🏥 Patient (/patient)
 
@@ -296,6 +321,10 @@ _Doctors assign master slots to their own calendar._
 | POST   | /appointment                | Book an appointment (Patient)                              |
 | PATCH  | /appointment/status/:id     | Change status (SCHEDULED, INPROGRESS, COMPLETED, CANCELED) |
 
+Notes:
+
+- When an appointment is created, the API generates a `videoCallingId` (Jitsi meeting URL) and stores it on the appointment.
+
 ### 10. 💳 Payments (/payment)
 
 | Method | Endpoint                             | Description                       |
@@ -324,6 +353,14 @@ _Doctors assign master slots to their own calendar._
 | :----- | :------- | :---------------------------------------------------- |
 | GET    | /meta    | Get Dashboard Statistics (User counts, Revenue, etc.) |
 
+### 14. 🔔 Notifications (/notification)
+
+| Method | Endpoint                       | Description                        |
+| :----- | :----------------------------- | :--------------------------------- |
+| GET    | /notification/my-notifications | Get logged-in user's notifications |
+| PATCH  | /notification/mark-all-read    | Mark all notifications as read     |
+| PATCH  | /notification/:id/read         | Mark a single notification as read |
+
 ---
 
 ## 🗄️ Database Schema (ERD)
@@ -334,16 +371,17 @@ _(Ensure ERD.jpg is present in your project root)_
 
 ## 📜 Scripts
 
-| Script              | Description                                |
-| :------------------ | :----------------------------------------- |
-| pnpm dev            | Start development server with ts-node-dev  |
-| pnpm build          | Compile TypeScript to JavaScript           |
-| pnpm start          | Start the production server                |
-| pnpm db:generate    | Generate Prisma Client                     |
-| pnpm db:push        | Push schema changes to DB (Prototyping)    |
-| pnpm db:migrate     | Run production migrations                  |
-| pnpm db:studio      | Open Prisma Studio GUI                     |
-| pnpm stripe:webhook | Forward Stripe webhook events to localhost |
+| Script              | Description                                       |
+| :------------------ | :------------------------------------------------ |
+| pnpm dev            | Start development server with ts-node-dev         |
+| pnpm build          | Compile TypeScript to JavaScript                  |
+| pnpm start          | Start the production server                       |
+| pnpm db:generate    | Generate Prisma Client                            |
+| pnpm db:push        | Push schema changes to DB (Prototyping)           |
+| pnpm db:migrate     | Run production migrations                         |
+| pnpm db:studio      | Open Prisma Studio GUI                            |
+| pnpm stripe:webhook | Forward Stripe webhook events to localhost        |
+| pnpm api:verify     | Run automated Postman collection API verification |
 
 ---
 

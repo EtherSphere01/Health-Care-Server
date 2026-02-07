@@ -12,7 +12,7 @@ const insertIntoDB = catchAsync(async (req: Request, res: Response) => {
         statusCode: httpStatus.OK,
         success: true,
         message: "Specialties created successfully!",
-        data: result
+        data: result,
     });
 });
 
@@ -29,12 +29,12 @@ const getAllFromDB = catchAsync(async (req: Request, res: Response) => {
 });
 
 const deleteFromDB = catchAsync(async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const result = await SpecialtiesService.deleteFromDB(id);
     sendResponse(res, {
         statusCode: httpStatus.OK,
         success: true,
-        message: 'Specialty deleted successfully',
+        message: "Specialty deleted successfully",
         data: result,
     });
 });
@@ -42,5 +42,5 @@ const deleteFromDB = catchAsync(async (req: Request, res: Response) => {
 export const SpecialtiesController = {
     insertIntoDB,
     getAllFromDB,
-    deleteFromDB
+    deleteFromDB,
 };
