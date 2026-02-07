@@ -82,7 +82,11 @@ const PaginationQueryParams: ParameterObject[] = [
 ];
 
 export function createOpenApiSpec(): any {
-    const serverUrl = process.env.SWAGGER_SERVER_URL || "/";
+    const vercelUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : undefined;
+
+    const serverUrl = process.env.SWAGGER_SERVER_URL || vercelUrl || "/";
 
     const spec: any = {
         openapi: "3.0.3",

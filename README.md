@@ -11,7 +11,16 @@ A robust and scalable REST API for a complete HealthCare Management System. This
 
 ## Live Frontend:
 
+https://health-care-client-rust.vercel.app/
+
 ## Live Backend:
+
+https://health-care-server-gamma.vercel.app/
+
+## Live Swagger (API Docs)
+
+- Swagger UI: https://health-care-server-gamma.vercel.app/docs
+- OpenAPI JSON: https://health-care-server-gamma.vercel.app/docs-json
 
 Frontend Repo: https://github.com/EtherSphere01/Health-Care-Client.git
 
@@ -202,6 +211,8 @@ yarn start
 
 Base URL: http://localhost:5000/api/v1
 
+Production Base URL: https://health-care-server-gamma.vercel.app/api/v1
+
 ### 📚 Swagger (OpenAPI) Docs
 
 The server exposes Swagger UI and the raw OpenAPI JSON.
@@ -215,6 +226,10 @@ By default, the OpenAPI `servers` entry is relative (`/`) so it works when you o
 If you want Swagger “Try it out” to explicitly point to a specific URL, set:
 
 - `SWAGGER_SERVER_URL=https://your-api-domain.com`
+
+Deployed backend (your current URL):
+
+- `SWAGGER_SERVER_URL=https://health-care-server-gamma.vercel.app`
 
 Example (local):
 

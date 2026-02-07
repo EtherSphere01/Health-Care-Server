@@ -7,7 +7,6 @@ import globalErrorHandler from "./app/middlewares/globalErrorHandler";
 import router from "./app/routes";
 import { PaymentController } from "./app/modules/payment/payment.controller";
 import { AppointmentService } from "./app/modules/appointment/appointment.service";
-import swaggerUi from "swagger-ui-express";
 import { createOpenApiSpec } from "./docs/openapi";
 
 const app: Application = express();
@@ -19,9 +18,23 @@ app.post(
     PaymentController.handleStripeWebhookEvent,
 );
 
+const allowedOrigins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    ...(process.env.FRONTEND_URL
+        ? process.env.FRONTEND_URL.split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+        : []),
+];
+
 app.use(
     cors({
-        origin: ["http://localhost:3000", "http://localhost:3001"],
+        origin: (origin, callback) => {
+            if (!origin) return callback(null, true);
+            if (allowedOrigins.includes(origin)) return callback(null, true);
+            return callback(new Error(`CORS blocked for origin: ${origin}`));
+        },
         credentials: true,
     }),
 );
@@ -35,15 +48,40 @@ app.get("/docs-json", (req: Request, res: Response) => {
     res.json(createOpenApiSpec());
 });
 
-app.use(
-    "/docs",
-    swaggerUi.serve,
-    swaggerUi.setup(createOpenApiSpec(), {
-        swaggerOptions: {
-            persistAuthorization: true,
-        },
-    }),
-);
+app.get(["/docs", "/docs/"], (req: Request, res: Response) => {
+    // Use CDN assets so this works reliably on serverless platforms
+    // where swagger-ui-dist static files may not be bundled.
+    const specUrl = "/docs-json";
+    const html = `<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>API Docs</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
+    </head>
+    <body>
+        <div id="swagger-ui"></div>
+        <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+        <script>
+            window.onload = function () {
+                window.ui = SwaggerUIBundle({
+                    url: ${JSON.stringify(specUrl)},
+                    dom_id: '#swagger-ui',
+                    deepLinking: true,
+                    presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+                    layout: 'StandaloneLayout',
+                    persistAuthorization: true,
+                });
+            };
+        </script>
+    </body>
+</html>`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(html);
+});
 
 cron.schedule("*/10 * * * *", () => {
     try {
