@@ -14,6 +14,7 @@
         "db:push": "prisma db push --schema=./prisma/schema",
         "db:pull": "prisma db pull --schema=./prisma/schema",
         "db:studio": "prisma studio --schema=./prisma/schema",
+        "db:seed": "ts-node-dev --transpile-only ./scripts/db-seed.ts",
         "postinstall": "npx prisma generate",
         "stripe:webhook": "stripe listen --forward-to localhost:5000/webhook"
     },

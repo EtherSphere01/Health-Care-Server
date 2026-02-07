@@ -19,10 +19,9 @@ https://health-care-server-gamma.vercel.app/
 
 ## Live Swagger (API Docs)
 
+- Frontend Repo: https://github.com/EtherSphere01/Health-Care-Client.git
 - Swagger UI: https://health-care-server-gamma.vercel.app/docs
 - OpenAPI JSON: https://health-care-server-gamma.vercel.app/docs-json
-
-Frontend Repo: https://github.com/EtherSphere01/Health-Care-Client.git
 
 ## 🚀 Key Features
 
