@@ -7,13 +7,32 @@ import { IAuthUser } from "../../interfaces/common";
 import { appointmentFilterableFields } from "./appointment.constant";
 import { AppointmentService } from "./appointment.service";
 
+function getRequestOrigin(req: Request): string | undefined {
+    const origin = req.headers.origin;
+    if (typeof origin === "string" && origin.trim()) return origin.trim();
+
+    const referer = req.headers.referer;
+    if (typeof referer === "string" && referer.trim()) {
+        try {
+            return new URL(referer).origin;
+        } catch {
+            return undefined;
+        }
+    }
+
+    return undefined;
+}
+
 const createAppointment = catchAsync(
     async (req: Request & { user?: IAuthUser }, res: Response) => {
         const user = req.user;
 
+        const origin = getRequestOrigin(req);
+
         const result = await AppointmentService.createAppointment(
             user as IAuthUser,
             req.body,
+            origin,
         );
 
         sendResponse(res, {
@@ -108,9 +127,12 @@ const initiatePayment = catchAsync(
         const user = req.user;
         const id = String(req.params.id);
 
+        const origin = getRequestOrigin(req);
+
         const result = await AppointmentService.initiatePaymentForAppointment(
             id,
             user as IAuthUser,
+            origin,
         );
 
         sendResponse(res, {

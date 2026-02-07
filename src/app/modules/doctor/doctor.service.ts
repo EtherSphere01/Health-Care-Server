@@ -340,9 +340,14 @@ type PatientInput = {
     symptoms: string;
 };
 
+type ConsultationSuggestedDoctor = {
+    id: string;
+    name: string;
+};
+
 type ConsultationAiSuggestion = {
     suggestedSpecialties: string[];
-    suggestedDoctors: string[];
+    suggestedDoctors: ConsultationSuggestedDoctor[];
     recommendations: string;
     urgencyLevel: "low" | "medium" | "high";
 };
@@ -411,8 +416,11 @@ const getConsultationAISuggestion = async (
 
         return scored
             .slice(0, 6)
-            .map((x) => `Dr. ${x.doctor.name}`)
-            .filter(Boolean);
+            .map((x) => ({
+                id: String(x.doctor.id),
+                name: String(x.doctor.name ?? "").trim(),
+            }))
+            .filter((d) => d.id && d.name);
     };
 
     // Minimal fallback if OpenRouter isn't configured or parsing fails.

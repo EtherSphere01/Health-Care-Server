@@ -10,11 +10,35 @@ import { v4 as uuidv4 } from "uuid";
 import { paginationHelper } from "../../../helpers/paginationHelper";
 import { stripe } from "../../../helpers/stripe";
 import prisma from "../../../shared/prisma";
+import config from "../../../config";
 import ApiError from "../../errors/ApiError";
 import { IAuthUser } from "../../interfaces/common";
 import { IPaginationOptions } from "../../interfaces/pagination";
 
-const createAppointment = async (user: IAuthUser, payload: any) => {
+function normalizeOrigin(raw: string | undefined): string | undefined {
+    const value = raw?.trim();
+    if (!value) return undefined;
+    try {
+        return new URL(value).origin;
+    } catch {
+        return value.replace(/\/+$/g, "");
+    }
+}
+
+function getFrontendBaseUrl(requestOrigin?: string): string {
+    return (
+        normalizeOrigin(requestOrigin) ||
+        config.frontendUrl ||
+        "http://localhost:3000"
+    );
+}
+
+const createAppointment = async (
+    user: IAuthUser,
+    payload: any,
+    requestOrigin?: string,
+) => {
+    const frontendBaseUrl = getFrontendBaseUrl(requestOrigin);
     const patientData = await prisma.patient.findUniqueOrThrow({
         where: {
             email: user?.email,
@@ -112,8 +136,8 @@ const createAppointment = async (user: IAuthUser, payload: any) => {
                 appointmentId: appointmentData.id,
                 paymentId: paymentData.id,
             },
-            success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/my-appointments?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/my-appointments?session_id={CHECKOUT_SESSION_ID}`,
+            success_url: `${frontendBaseUrl}/dashboard/my-appointments?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${frontendBaseUrl}/dashboard/my-appointments?payment=cancelled`,
         });
 
         return { paymentUrl: session.url };
@@ -498,7 +522,9 @@ const createAppointmentWithPayLater = async (user: IAuthUser, payload: any) => {
 const initiatePaymentForAppointment = async (
     appointmentId: string,
     user: IAuthUser,
+    requestOrigin?: string,
 ) => {
+    const frontendBaseUrl = getFrontendBaseUrl(requestOrigin);
     const patientData = await prisma.patient.findUniqueOrThrow({
         where: {
             email: user?.email,
@@ -569,7 +595,7 @@ const initiatePaymentForAppointment = async (
         });
 
         return {
-            paymentUrl: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/my-appointments`,
+            paymentUrl: `${frontendBaseUrl}/dashboard/my-appointments`,
             transactionId,
         };
     }
@@ -595,8 +621,8 @@ const initiatePaymentForAppointment = async (
             appointmentId: appointment.id,
             paymentId: appointment.payment!.id,
         },
-        success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/my-appointments?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/dashboard/my-appointments?session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${frontendBaseUrl}/dashboard/my-appointments?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${frontendBaseUrl}/dashboard/my-appointments?payment=cancelled`,
     });
 
     return { paymentUrl: session.url, transactionId };

@@ -4,9 +4,20 @@ import path from "path";
 // Load .env from the project root (robust even if the process is started from a different cwd)
 dotenv.config({ path: path.join(__dirname, "..", "..", "..", ".env") });
 
+function normalizeOrigin(raw: string | undefined): string | undefined {
+    const value = raw?.trim();
+    if (!value) return undefined;
+    try {
+        return new URL(value).origin;
+    } catch {
+        return value.replace(/\/+$/g, "");
+    }
+}
+
 export default {
     env: process.env.NODE_ENV,
     port: process.env.PORT,
+    frontendUrl: normalizeOrigin(process.env.FRONTEND_URL),
     stripeSecretKey: process.env.STRIPE_SECRET_KEY,
     stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
     salt_round: process.env.SALT_ROUND,

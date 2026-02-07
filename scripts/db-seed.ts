@@ -101,10 +101,10 @@ async function seed() {
     ];
 
     const specialties = await Promise.all(
-        Array.from({ length: 20 }).map((_, i) =>
+        specialtyTitles.map((title, i) =>
             prisma.specialties.create({
                 data: {
-                    title: pick(specialtyTitles, i),
+                    title,
                     // Intentionally leave some icons empty to test frontend fallbacks
                     icon: i % 3 === 0 ? null : undefined,
                 },
@@ -214,7 +214,7 @@ async function seed() {
     const doctorProfiles = doctors.map((u) => u.doctor).filter(Boolean);
 
     console.log("🧩 Assigning doctor specialties...");
-    // Ensure each specialty (department) has 3–6 doctors.
+    // Ensure each specialty (department) has 3–8 doctors.
     // This is a many-to-many relationship, so doctors can have multiple specialties.
     const doctorSpecialtiesRows: {
         doctorId: string;
@@ -224,7 +224,7 @@ async function seed() {
     const used = new Set<string>();
 
     for (const specialty of specialties) {
-        const desiredDoctorsForSpecialty = randInt(3, 6);
+        const desiredDoctorsForSpecialty = randInt(3, 8);
         const selectedDoctors = shuffle(doctorProfiles).slice(
             0,
             Math.min(desiredDoctorsForSpecialty, doctorProfiles.length),
@@ -295,22 +295,53 @@ async function seed() {
     const patientProfiles = patients.map((u) => u.patient).filter(Boolean);
 
     console.log("📅 Seeding schedules + doctor schedules...");
-    const now = new Date();
-    const base = new Date(now);
-    base.setDate(base.getDate() + 1);
-    base.setHours(9, 0, 0, 0);
 
-    // 5 slots per doctor => 100 doctor schedule rows
+    const startBase = new Date();
+    startBase.setDate(startBase.getDate() + 1);
+    startBase.setHours(0, 0, 0, 0);
+
+    const end2030 = new Date();
+    end2030.setFullYear(2030, 11, 31);
+    end2030.setHours(23, 59, 59, 999);
+
+    const maxDaysAhead = Math.max(
+        1,
+        Math.floor((end2030.getTime() - startBase.getTime()) / 86400000),
+    );
+
+    // Multiple slots per doctor across random dates up to 2030.
     const doctorScheduleRows: { doctorId: string; scheduleId: string }[] = [];
 
     for (let i = 0; i < doctorProfiles.length; i++) {
         const doctor = doctorProfiles[i]!;
+        const usedSlots = new Set<string>();
 
-        for (let s = 0; s < 5; s++) {
-            const dayOffset = (i + s) % 10;
-            const slotStart = new Date(base);
-            slotStart.setDate(slotStart.getDate() + dayOffset);
-            slotStart.setHours(9 + (s % 4) * 2, 0, 0, 0);
+        // 8 slots per doctor (some near-term, some long-range)
+        for (let s = 0; s < 8; s++) {
+            // Near-term bias for some slots so there are upcoming appointments,
+            // while still keeping random availability up to 2030.
+            const daysAhead =
+                s < 3
+                    ? randInt(1, Math.min(60, maxDaysAhead))
+                    : randInt(1, maxDaysAhead);
+
+            let slotStart: Date | null = null;
+            for (let attempt = 0; attempt < 10; attempt++) {
+                const candidate = new Date(startBase);
+                candidate.setDate(candidate.getDate() + daysAhead);
+
+                const hour = randInt(8, 17);
+                const minute = randInt(0, 1) * 30;
+                candidate.setHours(hour, minute, 0, 0);
+
+                const key = candidate.toISOString();
+                if (usedSlots.has(key)) continue;
+                usedSlots.add(key);
+                slotStart = candidate;
+                break;
+            }
+
+            if (!slotStart) continue;
 
             const schedule = await prisma.schedule.create({
                 data: {

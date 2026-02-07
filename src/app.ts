@@ -18,10 +18,23 @@ app.post(
     PaymentController.handleStripeWebhookEvent,
 );
 
+function normalizeOrigin(raw: string | undefined): string | undefined {
+    const value = raw?.trim();
+    if (!value) return undefined;
+    try {
+        return new URL(value).origin;
+    } catch {
+        return value.replace(/\/+$/g, "");
+    }
+}
+
 const backendOrigins = [
-    process.env.SWAGGER_SERVER_URL,
+    normalizeOrigin(process.env.SWAGGER_SERVER_URL),
     process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
-].filter(Boolean) as string[];
+]
+    .filter(Boolean)
+    .map((x) => normalizeOrigin(x) || x)
+    .filter(Boolean) as string[];
 
 const allowedOrigins = [
     "http://localhost:3000",
@@ -29,7 +42,7 @@ const allowedOrigins = [
     ...backendOrigins,
     ...(process.env.FRONTEND_URL
         ? process.env.FRONTEND_URL.split(",")
-              .map((s) => s.trim())
+              .map((s) => normalizeOrigin(s) || s.trim())
               .filter(Boolean)
         : []),
 ];
